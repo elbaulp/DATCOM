@@ -1,0 +1,426 @@
+#+TITLE: Aprendizaje no Supervisado y Detección de Anomalías
+#+AUTHOR: Alejandro Alcalde
+#+LANGUAGE: es
+#+LATEX_COMPILER: xelatex
+#+STARTUP: inlineimages
+#+STARTUP: latexpreview
+#+OPTIONS: H:6
+
+El aprendizaje automático se distingue en dos tipos. *Supervisado*, donde se dispone de información sobre la clase a la que pertenece una instancia o *no supervisado*, donde esta información no está disponible. Estos apuntes se centran en el último tipo. En la figura \ref{fig:classTree} se muestra un árbol de tipos de clasificaciones.
+
+#+CAPTION: Árbol de tipos de clasificaciones.
+#+NAME: fig:classTree
+[[file:img/classTree.png]]
+
+* Clustering
+/Clustering/ intenta encontrar patrones en los datos que formen grupos claramente separados. Encontrar estos grupos tiene varias aplicaciones. Por ejemplo si los datos tratan sobre clientes, cada grupo encontrado podría usarse para realizar una segmentación de clientes en marketing, y ofrecer así distintos productos a cada grupo. Otra posible aplicación es agrupar documentos por temática, donde cada /cluster/ o grupo pertenece a un tipo de documento. En este tipo de aplicaciones /clustering/ se usa como aplicación final, sin embargo puede usarse como paso previo a otras técnicas de aprendizaje. Algunos ejemplos son exploración de datos y preprocesamiento de datos.
+
+Uno de los problemas del /clustering/ es su subjetividad. En la Figura~\ref{fig:clusAggr} aparece un conjunto de datos, pero bajo este mismo conjunto se pueden hacer agrupamientos diferentes.
+
+#+CAPTION: Agrupar es subjetivo. /Cred. Prof. Juan Carlos Cubero/
+#+NAME: fig:clusAggr
+[[file:img/clustering-agrupamientos.png]]
+
+** Medidas de similitud
+Una solución al problema descrito en la sección anterior es definir una buena medida de similitud. Para ello es necesario usar únicamente los atributos adecuados, no es necesario usar todos los atributos para calcular la similitud de una instancia frente a otra. También es importante tener en cuenta las magnitudes de cada atributo como paso previo a calcular la similitud, y por tanto es necesario normalizar. Principalmente hay dos formas de normalizar un conjunto de datos para atributos continuos. El método /Min-Max/ y /z-score/. Estas normalizaciones se deben llevar a cabo para cada atributo del conjunto de datos. Es recomendable eliminar cualquier *outlier*, ya que puede afectar mucho al proceso de normalización. De los dos anteriores, es recomendable usar /z-score/, ya que preserva el rango de los datos.
+
+Para crear medidas de similitud se consideran la semejanzas o distancias. A mayor valor de semejanza, más se parecen los dos puntos en comparación, sin embargo, a mayor distancia, menor parecido. Es común usar medidas de distancia para descubrir cómo de semejantes son dos puntos. Toda medida de distancia debe cumplir una serie de propiedades, listadas a continuación.
+
+- Reflexiva: $d(x,y) = 0\text{ sii } x = y$
+- Simétrica: $d(x,y) = d(y,x)$
+- Desigualdad triangular: $d(x,y) \leq d(x,z) + d(z,y)$
+
+La desigualdad triangular puede comprenderse mejor visualmente en la figura \ref{fig:triangle}. Es decir, la suma de dos de los lados del triángulo siempre va a ser mayor o igual a la del lado restante. Como muestra la figura, conforme menos área tiene el triángulo, más cercana es la suma de dos lados al lado restante.
+
+#+CAPTION: Desigualdad triangular explicada visualmente. Créd. [[https://en.wikipedia.org/wiki/Triangle_inequality][Wikipedia]]
+#+NAME: fig:triangle
+[[file:./img/triangle.png]]
+*** Medidas de distancia
+Las principales medidas de distancia son:
+- /Euclídea/ o $L_2$: $d_2(x,y) = \sqrt{\sum_{j=1}^J(x_j - y_j)^2}$
+- /Manhattan/ o $L_1$: $d_1(x,y) = \sum_{j=1}^J|x_j - y_j|$
+- /Chebyshev/ o $L_{\infty}$: $d_\infty = \text{máx}_{j\dots J}|x_j - y_j|$
+- /Minkowski/ o Lr-norm: $d_p(x,y) = \left ( \sum_{j=1}^J|x_j - y_j|^p\right )^\frac{1}{p}, p \geq 1$
+
+La distancia Euclídea es la línea recta entre dos puntos. En la distancia Manhattan la distancia entre dos puntos es la suma en valor absoluto de las diferencias de sus coordenadas cartesianas. La Figura \ref{fig:maneu} muestra cómo pueden existir varios caminos a dos puntos usando Manhattan, pero solo uno y el más corto por Euclídea.
+
+#+CAPTION: Distancias Manhattan y Euclidea. Las líneas roja, azul y amarilla tienen distancia Manhattan 12, la menor posible. La verde tiene distancia Euclídea 8.49. /Créd. [[https://en.wikipedia.org/wiki/Taxicab_geometry][Wikipedia]]/
+#+NAME: fig:maneu
+[[file:./img/maneu.png]]
+
+La distancia de Minkowski es una generalización de las dos anteriores
+
+En la distancia de Chebyshev la distancia entre dos puntos es la mayor de sus diferencias a lo largo de cualquiera de sus dimensiones coordenadas. También conocida como la distancia del tablero de ajedrez, por coincidir con el número de movimientos que puede hacer el rey para moverse por el tablero, como muestra la figura \ref{fig:chess}.
+
+#+CAPTION: Distancia de Chebyshev. /Créd. Wikipedia/
+#+NAME: fig:chess
+[[file:img/chess.png]]
+
+Por último la distancia de Minkowski es una generalización de las anteriores. Cuando $p = 1$ corresponde con la distancia de Manhattan, para $p = 2$ distancia Euclídea, y cuando $p \to \infty$ corresponde con la distancia de Chebyshev. En la figura \ref{fig:Minkowski} aparecen distintas distancias para varios valores de $p$, en esta imagen se aprecia la distancia Manhattan para $p=1$, Euclídea para $p=2$ y Chebyshev para $p=\infty$.
+
+#+CAPTION: Distintos valores de $p$ para la distancia de Minkowski. /Créd. Wikipedia/
+#+NAME: fig:Minkowski
+[[file:img/minkos.png]]
+
+** Tipos de Clustering
+
+Dentro de la clasificación no supervisada se distinguen principalmente los siguientes tipos de /clustering/:
+
+- *Agrupamiento por particiones*: Una simple división del conjunto de datos en sub conjuntos disjuntos (No solapados) de tal forma que cada punto del conjunto pertenece a uno de dichos subconjuntos (o /clusters/). La figura \ref{fig:clustPart} es un ejemplo de este tipo de agrupamiento.
+  - *Basados en densidad*: En este tipo de /clustering/ un /cluster/ es una región densa de objetos rodeados por una región de baja densidad. Suele usarse cuando hay ruido y /outliers/ presentes en los datos.
+  - *Basados en Grafos*: Los datos se representan como un gráfo, los nodos son los puntos y los enlaces representan una conexión entre ambos. Un grupo de objetos conectados los unos con los otros pero no conectados con el resto de puntos en el conjunto de datos forma un /cluster/. Para definir los grupos es necesario que cada objeto de un /cluster/ esté más cerca de cualquier otro punto de su grupo que a un punto de otro /cluster/. Esta técnica tiene problemas en presencia de ruido u /outliers/.
+  - *Mínimo error cuadrático*: En este algoritmo se usa la minimización del error cuadrático para determinar a qué /cluster/ pertenece el punto. Esta técnica la usa el algoritmo K-Medias.
+- *Jerárquico*: Si en el agrupamiento por particiones se permite que cada /cluster/ tenga sub-clusters se obtiene un /clustering/ jerárquico. Consiste en permitir que los /clusters/ puedan anidarse, organizado en forma de árbol. Cada nodo del árbol, un /cluster/ en este caso a exepción de los nodos hoja, forman la unión de sus hijos (los /sub-clusters/). La raíz del árbol es el /cluster/ conteniendo a todos los datos. Los nodos hoja suelen corresponder con un único dato, pero no es obligatorio. La figura \ref{fig:clustHie} muestra un ejemplo de este tipo de /clustering/. La figura \ref{fig:clustHie}(d) es un ejemplo de /clustering/ jerárquico, el nodo raíz contendría todos los puntos, el nodo a la izquierda está formado por un /cluster/ de tres /sub-clusters/. Los métodos jerárquicos se clasifican en *aglomerativos* o *divisivos*. El primero considera cada punto un /cluster/ y en cada paso fusiona los pares más cercanos como un /cluster/. Esta técnica requiere de una forma de medir la proximidad entre dos /clusters/. El segundo comienza con todos los datos como un solo /cluster/ y subdivide hasta quedarse con puntos individuales como /clusters/. Las técnicas aglomerativas son las más usadas, por esta razón se explican a continuación los distintos métodos. La figura \ref{fig:clustHieAgg} los ilustra.
+  - *Enlace Simple*: La proximidad entre dos /clusters/ viene dada por la distancia entre los dos puntos más cercanos de cada /cluster/.
+  - *Enlace Completo*: Análogo al anterior, pero usa la distancia de los dos puntos más lejanos de cada /cluster./
+  - *Enlace Ponderado*: Usa las distancias pares a pares de todos los puntos en cada /cluster/.
+  - *Método de Ward*: Mide la proximidad entre dos /clusters/ usando el incremento del error cuadrático medio producido al unir dos /clusters/.
+
+#+CAPTION: Tipos de medidas de proximidad para clustering aglomerativo
+#+NAME: fig:clustHieAgg
+[[file:img/clustHieAgg.png]]
+
+#+CAPTION: Agrupamiento por particiones. Cred. Transparencias de clase.
+#+NAME: fig:clustPart
+[[file:img/clustPart.png]]
+
+#+CAPTION: Distintos tipos de clustering para los mismos datos
+#+NAME: fig:clustHie
+[[file:img/clustHie.png]]
+
+** Algoritmos de /clustering/
+*** K-Means
+K-Means es un un algoritmo de /clustering/ por particiones. Tiene un parámetro de entrada, =k=, indicando el número de /clusters/ a generar, por tanto es necesario conocer a priori el número de grupos a encontrar. Cada /cluster/ está representado por su centroide (centro geométrico del /cluster/). Los centroides pueden ser puntos reales o no, en caso de ser un punto real del conjunto de datos se denominan menoides.  En cada iteración del algoritmo dichos centroides se recalculan hasta llegar a un criterio de parada. La figura \ref{fig:kmeansEx} muestra ejemplos de varias iteraciones de K-Means, en él se ilustra el proceso de actualización de los centroides.
+#+CAPTION: Ejemplo de ejecución de K-Means
+#+NAME: fig:kmeansEx
+[[file:img/kmeansEx.png]]
+
+**** *Descripción del algoritmo*
+
+K-Means se compone de dos fases principales:
+
+El proceso de inicialización consta de dos pasos. Primeramente se escoge el número de centroides (k) y se asignan aleatoriamente, como muestra la figura \ref{fig:kmeansEx}(a). Una vez colocados los a cada punto se le asigna su correspondiente /cluster/ usando la media como medida de proximidad. Posteriormente se  recalculan los centroides con los puntos asignados y se actualizan.
+
+El proceso iterativo actualiza los centroides en cada iteración mientras los centroides cambien. En cada iteración se calcula la distancia de todos los puntos a los k centroides, formando k grupos y asignando a cada punto su centroide más cercano.
+
+**** *Asignación de clusters a los puntos*
+
+Para asignar a un punto el /cluster/ más cercano es necesario usar una medida de proximidad, la más común es la distancia Euclídea ($L_2$), aunque no es la única y la elección depende del tipo de datos. Al re-calcular los centroides de cada /cluster/ se optimiza una *función objetivo*, por ejemplo minimizar la distancias al cuadrado de cada punto a su /cluster/ más cercano, como muestra la siguiente ecuación:
+\[SSE = \sum^K_{i=1}\sum_{\textbf{x}\in C_i} dist \left ( c_i, x \right )^2\]
+donde $C_i$ es el i-ésimo /cluster/, $c_i$ es el centróide del /cluster/ $C_i$ y $\textbf{x}$ es un punto y $dist$ es la distancia.
+
+Con esta función objetivo, se calcula el error de cada punto, es decir, su distancia euclídea al /cluster/ más cercano, luego se calcula la suma total de los errores al cuadrado. Con este dato, y dados dos conjuntos de /clusters/ distintos generados por el algoritmo, K-Means escoge aquel con menor error cuadrático.
+
+Dada esta función objetivo, lo ideal es resolver el problema de optimización y encontrar el óptimo global, sin embargo es computacionalmente imposible de realizar. Por ello se realizan aproximaciones, como *gradiente descendente*. Esta técnica consiste en escoger una solución inicial y repetir estos dos pasos: Calcular el cambio en la solución que mejor optimizar la función objetivo (Mediante derivadas) y actualizar la solución.
+
+**** *Elección de los centroides iniciales*
+
+Elegir los centroides iniciales al azar usualmente no da buenos resultados, ya que el SSE variará notablemente en función de qué centroides iniciales se escojan. Una posible solución consiste en lanzar el algoritmo varias veces con distintos centroides iniciales y escoger los mejores, pero el problema sigue existiendo debido a la naturaleza aleatoria de este proceso. Otra alternativa es estimar seleccionar el primero punto de forma aleatoria, o calcular el centroide usando todos los puntos. Posteriormente, para cada centroide inicial, seleccionar el punto más alejado de cualquiera de los centroides iniciales ya seleccionados. De esta forma está garantizado elegir un conjunto de centroides iniciales aleatorios y separados entre sí.
+
+**** *Elección del k óptimo*
+
+No hay ninguna forma de obtener el =k= óptimo salvo prueba y error. Sin embargo, se pueden usar algunas técnicas que suelen dar buenos resultados. Un ejemplo de ello es la técnica del codo. Se lanza el algoritmo para varios =k= y se genera un gráfico de cada =k= junto a su error. Un buen =k= debería ser el que se corresponda con un codo en el gráfico. La figura \ref{fig:kmeansElbow} muestra un ejemplo.
+#+CAPTION: Método del codo para elección de k
+#+NAME: fig:kmeansElbow
+[[file:img/kmeansElbow.png]]
+
+**** *Problemas de K-Means*
+
+Los principales problemas de este algoritmo son los /outliers/, ya que alteran las media de la distancia bastante. Una posible solución es usar la mediana como medida de proximidad en lugar de la media, en dicho caso es necesario usar la distancia de Manhattan. Una posible solución es eliminar dichos /outliers/, pero dependiendo del tipo de datos esto puede ser otro problema en sí mismo. Otra forma es usar menoides en lugar de centroides. Al usar un dato existente como centroide se minimiza el error introducido por los /outliers/.
+
+Cuando se tratan datos no numéricos, es posible usar k-modes. Esta variación del algoritmo escoge como centroide el valor de moda en el conjunto. El punto fuerte de esta técnica es que es muy robusto a /outliers/.
+
+**** *Pre y Post procesamiento requerido*
+
+Debido a que K-Means usa distancias, es necesario normalizar los datos para que todas contribuyan en igual medida, de lo contrario los atributos con mayores magnitudes tienen a dominar las decisiones del algoritmo.
+
+En cuanto al post procesamiento, es posible eliminar /clusters/ demasiado pequeños, y tratarlos como /clusters outliers/, dividir /clusters/ con un elevado SSE en varios o combinar aquellos con un SSE bajo.
+
+*** DBSCAN
+Este algoritmo es de la familia jerárquica del /clustering/, concretamente *basado en densidad*. Su principal característica es detectar regiones de puntos densas separadas de otras regiones poco densas. Al contrario que K-Means, detecta automáticamente el número de /clusters/. Debido a que las regiones poco densas son descartadas, no produce un /clustering/ completo, es decir, habrá puntos sin clasificar.
+
+DBSCAN está basado en una aproximación basada en el centro. Consiste en medir la densidad como el número de puntos que caen dentro de un radio especificado. El radio por tanto, es un parámetro del algoritmo que se debe ajustar. Una vez definido el radio, un punto puede caer en el interior de una región densa, en el borde o completamente fuera. A estos puntos se les llama puntos /core/, /border/ o /noise/, respectivamente ( en español Principales, frontera o ruido). La figura \ref{fig:dbscanPoints} muestra un ejemplo de cada uno de ellos.
+- *Core Points*: Corresponden a los puntos dentro de la región densa. Para ser un punto /core/ debe haber un número mínimo de puntos definidos como parámetro en su vecindario, que viene dado por el radio.
+- *Border Points*: Aunque no es un /core point/, cae en el entorno de un /core point/.
+- *Noise Points*: Un punto que no es ni /core/ ni /border/.
+#+CAPTION: Tipos de puntos en DBSCAN
+#+NAME: fig:dbscanPoints
+[[file:img/dbscanPoints.png]]
+
+**** *Descipción del algoritmo*.
+
+Para cualquier par de puntos /core/ lo suficientemente cercanos entre sí -- dentro de un radio definido -- se colocan en el mismo /cluster/. Análogamente, cualquier punto /border/ cercano a un /core/ se asigna al mismo /cluster/ del /core/. Los puntos de ruido, se descartan, por ello se indicó en el párrafo anterior que DBSCAN no es un /clustering/ completo.
+
+**** *Selección de parámetros*.
+
+DBSCAN necesita de dos parámetros antes de ser ejecutado, /MinPts/ y /Eps/, definiendo el número mínimo de puntos necesarios para considerar a un punto como /core/ y el radio, respectivamente. Lo más usual es observar cómo evoluciona la distancia de un punto a sus k-ésismos vecinos más cercanos (k-distancia). Para los puntos que forman parte de un /cluster/, el valor k-distancia será pequeño si /k/ no es mayor que el tamaño del /cluster/. Para los puntos que no pertenecen al /cluster/, la k-distancia será elevada. Por tanto, de forma visual es posible determinar el valor del parámetro /Eps/, como muestra la figura \ref{fig:dbscanEps}, y tomando el valor de =k= como /MinPts/.
+#+CAPTION: Elección de Eps y MinPts
+#+NAME: fig:dbscanEps
+[[file:img/dbscanEps.png]]
+**** *Pros y Contras de DBSCAN*.
+
+Que DBSCAN al use una aproximación basada en densidad le proporciona resistencia al ruido y es capaz de trabajar con /clusters/ de tamaños y formas arbitrarias, por tanto puede encontrar /clusters/ que K-Means no podría. Sin embargo, DBSCAN encuentra dificultades al trabajar con /clusters/ de distintas densidades. De igual manera, no funciona bien cuando los datos son de gran dimensionalidad, ya que medir la densidad en espacios de gran dimensión es difícil.
+** Evaluación de resultados
+Para la evaluación del resultado de un /clustering/ es necesario tener en cuenta varios aspectos, entre ellos:
+1. Determinar la *tendencia del /clustering/*, es decir, distinguir si realmente existe una estructura no aleatoria en los datos.
+2. Determinar el número correcto de /clusters/.
+3. Evaluar si realmente el resultado del /clustering/ corresponde con los patrones de los datos, sin referenciar a información externa (*Criterios internos*).
+4. Comparar los resultados del /clustering/ usando información externa, como etiquetas de las clases (*criterios externos*).
+5. Comprar dos conjuntos de /clusters/ y determinar cual es mejor.
+
+Debido a que las técnicas 1,2 y 3 no usan información externa, son técnicas *no supervisadas*, la cuarta sin embargo necesita información externa, y por tanto es *supervisada*. La quita puede considerarse un híbrido, ya que puede realizarse de forma supervisada o no supervisada.
+
+Las *técnicas no supervisadas* tratan me medir si la estructura del /clustering/ es adecuada sin información externa. Un ejemplo de ello es mediante el uso de SSE. Usando esta medida es posible definir la *cohesión* del /cluster/, la cual determina cómo están de juntos los puntos del /cluster/ así como la *separación*, que mide cómo de separado está un /cluster/ con respecto a otro. Para realizar estas mediciones pueden usarse o no los centroides, como muestra la figura \ref{fig:clustEvalUns}
+#+CAPTION: Formas de medir la cohesión y separación. /Créd. J.C Cubero/
+#+NAME: fig:clustEvalUns
+[[file:img/clustEvalUns.png]]
+
+En cuanto a las *técnicas supervisadas*, usando información externa, como por ejemplo datos etiquetados, mide hasta qué punto el /clustering/ consiguió descubrir la estructura de los datos. Un ejemplo de este tipo de técnica es la *entropía*, la cual mide cómo de bien coinciden las etiquetas de los /clusters/ con unos datos etiquetados previamente.
+
+Por último, comparar dos conjuntos de /clusterings/ puede hacerse de forma supervisada o no supervisada. Por ejemplo, lanzar dos veces K-Means y compararlos usando SSE o entropía.
+
+* Detección de Anomalías
+Antes de comenzar es necesario definir qué es una *anomalía*: Una anomalía es un dato muy distinto del resto. Esto puede deberse a fallos en mediciones, o a la propia naturaleza del dato. Por ejemplo, una intrusión a un sistema informático puede considerarse una anomalía, ya que por norma general el resto de actividades en dicho sistema serán legítimas. Por lo general, un dato se considera anómalo si escapa a los rangos de normalidad del resto de los datos.
+
+El tratamiento de los datos anómalos debe hacerse con cuidado, ya que en ocasiones se podrá descartar (cuando son errores de medición) y en otras será importante (Introsiones/ataques a un sistema).
+
+Ciertas técnicas de aprendizaje son más robustas frente a datos anómalos que otras. Un ejemplo de ello es la *regresión lineal*, la presencia de un dato anómalo afectará en gran medida al resultado del modelo, ya que este dato anómalo /“tirará”/ de la línea de regresión hacia él. Como muestra la figura \ref{fig:anoReg}
+#+CAPTION: Cómo afecta un dato anómalo a una regresión
+#+NAME: fig:anoReg
+[[file:img/anoReg.png]]
+También ocurre en /clustering/, ya que los datos anómalos desplazan los centroides hacia ellos (Figura \ref{fig:anoClust}).
+#+CAPTION: Cómo afecta un dato anómalo al /clustering/
+#+NAME: fig:anoClust
+[[file:img/anoClust.png]]
+
+Una buena analogía en este campo es encontrar una aguja en un pajar. Esa sería la forma fácil de encontrar una anomalía, ya que al menos se sabe que hay que encontrar una aguja. Pero en muchas ocasiones no se sabe *qué es lo que se debe encontrar.*
+
+** Aplicaciones
+Algunas aplicaciones son los *Sistemas de detección de intrusiones en red* (/Network Intrusion Detection Systems [NIDS]/ ). Cuando se conoce el tipo de anomalía los NIDS son basados en firmas, pero también existen sin conocer previamente el tipo de anomalía a detectar. Este documento se centrará en la última, NIDS basados en detección de anomalías. Ejemplos de este tipo de sistemas son:
+- Detectar intrusiones de red.
+- Fraude en tarjetas de crédito.
+- Detectar brotes de epidemias.
+- Análisis de regiones sospechosas en imágenes (Como radiografías).
+- Video vigilancia.
+
+** Métodos supervisados
+Cuando se conoce la existencia de anomalías en los datos, y se sabe cuales son, las técnicas usadas son de clasifiación supervisada. En este tipo de problemas se tienen dos conjuntos de datos, uno de entrenamiento y otro de test. Como se dispone de toda la información, los datos están etiquetados en función de si son anomalía o no. Con estos datos se construye un modelo que aprenda a distinguir ente un dato anómalo y uno legítimo.
+
+Una situación muy común en este tipo de datos es que están desbalanceados. Existen muchos más datos legítimos que anómalos, lo cual sesga el resultado del modelo. Este tipo de problemas se conoce como *calsificación desbalanceada*. Principalmente existen dos métodos para lidiar con este problema. *Métodos basados en Instancias* y *basados en algoritmos.* El primero consiste en modificar los datos antes de pasarlos al algoritmo, mientras que el segundo usa los datos originales sobre un algoritmo modificado.
+
+*** Basados en Instancias
+La forma de modificar los datos antes de pasarlos al algoritmo consiste en eliminar instancias de la clase mayoritaria (/undersampling/) o crear instancias artificiales de la clase minoritaria (/oversampling/). Algunos métodos de /underasmpling/ son /Tomek-links, CNN y NCL/, de /oversampling/ SMOTE, aunque este último realiza un /undersampling/ a la clase mayoritaria a la vez de un /oversampling/ de la clase minoritaria.
+*** Basados en Algoritmos
+En este caso no se alteran los datos, pero asignan distintos pesos a cada instancia mediante una *función de coste, bagging oo boosting*. Los métodos que usan la función de coste asignan costes muy altos a las clases minoritarias. *Bagging* incluye más instancias de la clase minoritaria en cada paso del algoritmos de /bagging/. Por contra, *Boosting* asigna más peso a las instancias de la clase minoritaria en cada paso. También existen alternativas híbridas, como *SmoteBoosting, SmoteBagging*  etc.
+*** Métricas de evaluación
+En este tipo de problemas la precisión del modelo no es importante, ya que un modelo sencillo que etiquete todas las instancias como legítimas podría tener un 99.9% de precisión en los casos en los que la anomalía esté presente el 0.1% del tiempo, y aún con este porcentaje de precisión no se estaría detectando ninguna anomalía. Esto es debido al desbalanceo entre las clases. Debido a ello es necesario usar otro tipo de métricas, como /Recall, Precisión, F-Measure, ROC etc/.
+
+** Métodos semi-supervisados
+Se conoce la existencia de anomalías, pero no se encuentran en el conjunto de datos. Con este conjunto de datos se define “*la normalidad*” del entorno. Por ejemplo, en datos de red, lo normal es que todo el tráfico sea legítimo, y sin saturaciones. El problema en esta situación es saber cómo modelar un “*comportamiento normal*”. Para ello hay varias técnicas, basadas en clasificación, en reglas de asociación, en máquinas de soporte vectorial.
+
+Los *modelos de clasificación* en el caso de conjuntos de datos correctamente balanceados sufre de cometer demasiados falsos positivos. Cuando un nuevo dato llega al modelo de clasificación, y éste lo clasifica incorrectamente, el dato se considera como una anomalía, lo cual no tiene por qué ser cierto. Para mejorar este modelo, se suelen usar clasificadores basados en reglas. Los clasificadores basados en reglas proporcionan más información cuando un dato se clasifica incorrectamente, informan en qué grado se considera al dato  anómalo, por ejemplo, en un 80%. Otra forma de abordar el problema es mediante la generación de *máquinas de estados finitos*, cuando llega un nuevo dato se comprueba contra esa máquina de estados finitos para determinar la legitimidad o no legitimidad. Un ejemplo de este tipo de modelos se encuentra en la figura \ref{fig:anoSemi}
+#+CAPTION: Máquina de estados finitos para modelar tráfico FTP
+#+NAME: fig:anoSemi
+[[file:img/anoSemi.png]]
+
+Los métodos *basados en reglas* buscan patrones frecuentes y reglas de asociación. Uno de estos métodos es *LERAD*. *LERAD* aprende reglas que encuentran eventos extraños en una serie temporal.
+
+Los métodos basados en *kernel* como Máquinas de Soporte Vectoriales asumen la existencia de una única clase definida como comportamiento normal. Este comportamiento normal se construye estableciendo una región en el espacio. Todo punto que caiga en ese espacio será considerado normal. Por contra, cuando un punto cae fuera de la región es considerado anómalo. Un ejemplo de la definición de este espacio se muestra en la figura \ref{fig:anoSVM}. Gracias a la potencia de los *kernels* es posible definir distintos tipos de regiones en el espacio para realizar la detección.
+#+CAPTION: SVMs para detección de Anomalías
+#+NAME: fig:anoSVM
+[[file:img/anoSVM.png]]
+
+Es posible construir modelos basándose en *los datos históricos*. En este tipo de métodos se asume como anomalía cualquier evento que no se haya producido en el pasado. Para ello se lleva un recuento de los eventos ocurridos y se comparan con los datos históricos para intentar detectar anomalías.
+
+** Métodos no supervisados
+Se dispone de anomalías en el conjunto, pero no están etiquetadas, no se conoce a priori si un dato es una anomalía o no, es decir, tanto anomalías como comportamientos legítimos están mezclados. En este campo existen también varias alternativas, las cuales se pasan a describir a continuación.
+
+*** Aproximaciones gráficas
+Como su nombre indica consiste en inspeccionar visualmente los datos para determinar cuales son los datos anómalos. Su principal desventaja es la cantidad de tiempo a invertir, y que es subjetivo. Para poder usar esta aproximación es necesario reducir/resumir la información a una dimensión que pueda ser visualizada (1D, 2D o 3D), y por tanto se está perdiendo información que puede resultar relevante. Una de las aproximaciones visuales más útiles es el /biplot/, que muestra una proyección a dos dimensiones de la varianza que aporta cada atributo. La figura \ref{fig:anoBiplot} muestra un /biplot/, la longitud de los vectores para cada atributo muestra la dirección más fuerte de los datos. Si dos atributos son ortogonales significa que no están correlados, lo cual implica que ambos pueden usarse en la construcción del modelo para obtener mejores resultados. Por contra, si dos atributos van en la misma dirección y tienen similares longitudes, están correlados, o negativamente correlados si van en direcciones opuestas.
+#+CAPTION: Biplot. *Var1* y *Var6* están muy poco correlacionadas, mientras que *Var1* y *Var10* sí lo están    /Créd. [[https://sukhbinder.wordpress.com/2016/03/02/biplot-in-python-revisited/]]/
+#+NAME: fig:anoBiplot
+[[file:img/anoBiplot.png]]
+
+*** Aproximaciones paramétricas
+Estas aproximaciones asumen un modelo paramétrico describiendo la distribución de los datos y usan tests estadísticos para determinar si un punto es  un /outlier/ con un nivel de significancia. Dichos tests dependen de la distribución inherente, sus parámetros y número de /outliers/ esperados. Entre los tests que consideran una sola variable se encuentran el *test de Grubb*, que considera un solo /outlier/, este test sufre de enmascaramiento (la media puede enmascarar /outliers/) , los tests de *Tietjen y Moore* consideran k /outliers/ y sufren de /swamping/ (de forma similar, la media oculta /outliers/). Cuando hay varias dimensiones (p dimensiones) se considera la *distancia de Mahalanobis*. En p dimensiones, un punto que sea considerado /outlier/ en uno de sus atributos seguirá siéndolo aunque en cualquiera de sus atributos restantes no sea considerado /outlier/, o cuando sea /outlier/ en varios de sus atributos.
+
+El problema de los tests del párrafo anterior es que necesitan de una medida de distancia multivariante. Además, para poder calcular una matriz de covarianza de forma correcta es necesario eliminar los /outliers/, de lo contrario la matriz no será correcta y proporcionará información falsa.
+
+*** Aproximaciones basadas en vecinos cercanos
+Las aproximaciones anteriores asumen una distribución normal de los datos, pero en muchos casos la distribución no es normal, e incluso se desconoce. Si se añade el hecho de dimensiones muy altas, los datos no suelen seguir una distribución multivariante específica. Aquí hay dos formas de obtener los vecinos, mediante una *función de distancia* que mide la cercanía entre dos puntos o asignando una puntuación de anomalía a un punto en función de su distancia frente al resto de puntos vecinos.
+
+*** Aproximaciones basadas en /clustering/
+En esta aproximación primero se construyen los /cluster/ mediante cualquier técnica de /clustering/, posteriormente se mide la distancia de un punto a su centroide para determinar si se trata de una anomalía. Se debe elegir con cuidado la medida de distancia. La *distancia Euclídea* no tiene en cuenta la densidad, por tanto es aconsejable usar la *distancia relativa* (La distancia relativa es la relación entre la distancia del punto del centroide a la distancia mediana de todos los puntos del /cluster/  desde el centroide).
+
+** Evaluación
+En detección de anomalías no basta obtener simplemente el porcentaje de acierto, es necesaria una matriz de confusión en la que se pueda observar la tasa de *falsos positivos* y *falsos negativos*. Dado que lo importante en este tipo de problema es detectar la anomalía es necesario observar el comportamiento de la precisión para detectar la anomalía. Para ello se usa la fórmula $\frac{TP}{TP + FP}$, que indica qué porcentaje en la predicción de anomalías es correcto, siendo TP un acierto verdadero y FP un falso positivo, a más cercana de 1 esta medida mejor. Es interesante fijarse en el /Recall/ ($\frac{TP}{TP + FN}$) que mide el porcentaje de anomalías detectadas, ya sean bien clasificadas o no. La proporción de falsos positivos $\frac{FP}{FP + TN}$ mide el porcentaje de clases normales que fueron clasificadas como anomalías. Por último, la especifidad ($\frac{TN}{TN + FP}$) indica el porcentaje de clases normales detectadas. No es posible mejorar todas las medidas anteriores simultáneamente (Cuando aumente la precisión, el /Recall/ va a decaer, ya que son inversos). Para atajar este problema se usa la medida $F_1$ -Score, la cual intenta encontar un equilibrio entre /Recall/ y precisión. Para terminar de aclarar estos conceptos, obtener una fiabilidad del $99\%$ en una enfermedad que ocurren en una de cada $10000$ no es fiable, ya que se equivocará una vez de cada $1000$. Cuando se habla de anomalías que aparecen muy poco el modelo va a cometer muchos falsos positivos, la solución a este problema es usar información adicional como la *probabilidad a priori de la anomalía, porcentaje de acierto y tasa de falsos positivos.*
+
+* Reglas de Asociación
+Las reglas de asociación se usan para aportar conocimiento que ayude a la toma de decisiones. Ejemplos en los que este tipo de métodos resulta útil es para conocer las tendencias de compra de los clientes. Otra aplicación es en tareas de predicción, como deducir los estudios de una persona en función de su salario. *Minería de textos* para asociar la presencia de términos en documentos etc.
+
+Este tipo de modelos se usa cuando prima la interpretabilidad del modelo, y son modelos predictivos. Es habitual usarlo *conjuntos difusos*. A diferencia de los árboles, que parten el espacio, las *reglas cubren parte del espacio*, disponiendo de un grado de cubrimiento y un acierto. Disponer de un *grado de cubrimiento* significa que las regiones de decisión pueden *solaparse o dejar zonas sin cubrir*, de ahí que sean muy usadas en problemas difusos.
+** Definición
+Las reglas de asociación son una de las técnicas más usadas para extraer conocimiento a partir de bases de datos grandes. Identifican relaciones existentes entre los datos, llamados /items/. Se trata de una técnica de *aprendizaje no supervisado*. Una regla se define como $X \rightarrow Y$, donde $X$ e $Y$ son conjuntos de /items/ disjuntos $X\mathcal{\cap} Y = \emptyset$. Un ejemplo: $\text{Pan} \rightarrow \text{Mantequilla}$ Cuando se compra pan, se compra mantequilla.
+
+En sus inicios, las reglas de asociación se aplicaron a datos de supermercados, ya que a estos les interesa saber qué productos suelen comprar los clientes, para ponerlos unos junto a otros y así reducir el tiempo de compra del cliente. En el caso de un supermercado, *los artículos* son los /items/ y el conjunto de *cestas de la compra* son las transacciones. Cada transacción es un subconjunto de /items/, llamado /itemset/. Por ejemplo Leche y pan $\rightarrow$ mantequilla.
+
+Los pasos a seguir antes de aplicar reglas de asociación es determinar qué datos de la base da datos son los /items/ y cuales las *transacciones*. Los /items/ son los elementos a asociar, /pan, mantequilla, aceite.../ mientras que las transacciones son particularidades de la relación entre /items/ (la lista de la compra concreta).
+
+Los /items/ pueden ser de varios tipos. Cuando cada registro es un listado de elementos, como en el caso de productos de la compra, no existen variables, un /item/ se corresponde con un producto. Cuando existen variables con rangos, el /item/ es un par (atributo, valor), por ejemplo una variable *puesto*, con valores /estudiante, jefe, trabajador/ tendría como /items/ (Puesto, estudiante), (Puesto, jefe) y (puesto, trabajador). Ejemplos de reglas usando /items/ de este tipo son: (Salario, alto) $\rightarrow$ (Estudios, Superiores). De la regla anterior se pueden deducir dos cosas: Todo el que tiene un salario alto tiene estudios superiores, o un salario alto implica estudios superiores.
+** Medidas Clásicas: Soporte y Confianza
+El *soporte* de un /itemset/ mide la frecuencia del /item/ o /itemset/ en la base de datos, es decir, la probabilidad de que el /itemset/ X esté en el conjunto de transacciones ($p(X)$). El *soporte de una regla de asociación* (X $\rightarrow$ Y ) es la frecuencia con la que ocurre el /itemset/ $X \cup Y$. Es decir, la probabilidad de que el /itemset/ $X \cup Y$ esté en el conjunto de transacciones ($p(X\wedge Y)$). La *confianza* define cómo de fiable es la regla, es decir, cómo de seguro está el modelo de que cuando se da $X$ va a ocurrir $Y$. Es útil comprobar la confianza en ambos sentidos de la regla, es decir, dado X $\rightarrow$ Y comprobar tanto $Conf(X, Y)$, como $Conf(Y, X)$. Como regla general, una confianza superior al 80% es buena, aunque esto es subjetivo y depende del problema y el experto.
+
+Definidas las medidas clásicas, la extracción de las reglas se lleva a cabo a partir de un conjunto de transacciones T. Dado ese conjunto se desea encontrar todas las reglas que cumplan:
+- =minSup=: Definido como Soporte $\geq$ soporte mínimo.
+- =minConf=: Definida como Confianza $\geq$ confianza mínima.
+Ambos valores los debe definir el experto del problema.
+
+Lo más sencillo es resolver este problema mediante fuerza bruta (Generar todas la reglas posibles, calcular para cada una de ellas el soporte y confianza y descartar las que no superen los umbrales anteriores). Sin embargo es inviable para problemas grandes. El enfoque basado en dos pasos *genera primero todos los /itemset/ frecuentes* (aquellos con un soporte mayor o igual al umbral =minSup=), posteriormente *genera las reglas con una confianza alta* basándose en los /itemset/ anteriores. El problema de esta aproximación es que el número de combinaciones posibles es de $2^d$, siendo $d$ el número de /items/, y por tanto la generación de los /itemset/ es costosa.
+
+Dado a la inviabilidad de resolver el problema mediante fuerza bruta, es necesario *reducir el número de candidatos posibles* (de los $2^d$ usar técnicas de poda para reducir el espacio), el *número de transacciones* y el *número de comparaciones*.
+** Métodos Clásicos de extracción de reglas
+*** Algoritmo Apriori
+**** Definición
+El primer método clásico se llama *Apriori*, es el que peor funciona de todos, pero del que más versiones existen. Se basa en la propiedad de *anti monotonía del soporte*, es decir, si un /itemset/ es frecuente, entonces todos sus subconjuntos deben serlo también:
+
+$$X\subseteq Y \Rightarrow sop(X) \geq sop(Y)$$
+**** Algoritmo
+El algoritmo funciona del siguiente modo:
+En memoria mantiene dos tablas, $L_k$ guarda el conjunto de /k-itemsets/ frecuentes, $C_k$ almacena el conjunto de /k-itemsets/ candidatos a ser frecuentes. El algoritmo (Suponiendo ~k=1~ ):
+1. Generar $L_1$ (/itemsets/ frecuentes de longitud 1)
+2. Repetir hasta que no se encuentren más /itemsets/ nuevos:
+   1. Generar el conjunto C(k+1) de /itemsets/ candidatos a partir de $L_k$, combinando solo aquellos que se diferencien en el último /item/.
+   2. Calcular el soporte de cada candidato.
+   3. Eliminar los candidatos infrecuentes.
+   4. Incrementar k en 1.
+La figura \ref{fig:rulesApriori} muestra un ejemplo.
+#+CAPTION: Ejemplo algoritmo Apriori. /Créd. Rafa Alcalá, Profesor Reglas de Asociación/
+#+NAME: fig:rulesApriori
+[[file:img/rulesApriori.png]]
+**** Eficiencia
+La *elección del umbral* para el soporte mínimo debe ser adecuada, umbrales demasiado bajos dan lugar a muchos /itemsets/ e incrementará la complejidad. El *número de /items/ en la base da datos* es un factor importante y afecta al rendimiento del algoritmo. De igual manera, el *tamaño de la base de datos* puede hacer incrementar considerablemente el tiempo de ejecución, ya que *apriori* realiza múltiples pasadas a toda la base de datos. Por último, la *longitud de las transacciones* puede aumentar la longitud de los /itemsets/ frecuentes, requiriendo de más espacio para almacenarlos.
+*** Algoritmo Eclat
+Este algoritmo es igual que *Apriori* pero mejora el cálculo del soporte obteniendo el mismo resultado. Para cada /item/ almacena en una lista en qué transacción aparece dicho /item/, de esta forma se reduce el tiempo de cómputo sacrificando más memoria.
+*** Algoritmo FP-Growth
+**** Definición
+Este algoritmo genera una representación comprimida de la base da datos mediante árboles. Mantiene una *tabla cabecera* donde para cada /item/ hay una lista enlazando a todos los nodos del grafo en el cual aparece dicho /item/. Además, el *grafo de transacciones* resume las transacciones en la base de datos junto con el soporte del /itemset/ que se forma siguiendo el camino desde la raíz del grafo hasta el nodo en cuestión. Como *requisito*, los /items/ deben estar ordenados. De todos los métodos vistos, *FP-Growth* es el más eficiente.
+**** Extracción de /itemsets/ frecuentes
+En este algoritmo se realiza en dos fases. Primero se calcula el soporte de los /items/ que aparecen en la *tabla cabecera*, recorriendo la lista almacenada en la tabla. Posteriormente, para cada /item/ superando el umbral de soporte, se extraen las ramas del árbol donde aparece el /item/ y se reajusta el soporte de todos los /items/ que aparecen en las ramas. Se genera un nuevo árbol considerando las ramas extraidas y se extraen los /itemsets/ que superen el umbral de soporte mínimo.
+** Conjuntos maximales y cerrados
+Los /itemsets Maximales/ son aquellos /itemsets/ frecuentes para los que ninguno de sus *superconjuntos* inmediatos son frecuentes. La Figura \ref{fig:rulesMaximals} muestra un ejemplo. Las ventajas de usar conjuntos maximales es la reducción del espacio, ya que a partir de los /itemsets/ frecuentes maximales se pueden deducir los /itemsets/ frecuentes. Como desventaja no se conoce el soporte de los /itemsets/ frecuentes, hay que volver a calcularlo.
+#+CAPTION: En azul: /itemsets/ frecuentes, en amarillo: /Itemsets Maximales/. /Créd: [[http://www.hypertextbookshop.com/dataminingbook/public_version/contents/chapters/chapter002/section004/blue/page001.html][hypertextbookshop]]/
+#+NAME: fig:rulesMaximals
+[[file:img/rulesMaximals.jpg]]
+Los /itemsets cerrados/ son los /itemsets/ frecuentes para los que ninguno de sus superconjuntos inmediatos tienen soporte igual al de ellos. Cabe destacar que todo /itemset maximal/ es también cerrado. La figura \ref{fig:rulesCerrados} muestra un ejemplo. La ventaja de los /itemsets cerrados/ es que no es necesario volver a calcular el soporte, mientras que como desventaja necesitan más espacio, al haber más cerrados que maximales.
+#+CAPTION: En azul: /itemsets cerrados/, en amarillo: /Itemsets maximales/. /Créd: [[http://www.hypertextbookshop.com/dataminingbook/public_version/contents/chapters/chapter002/section004/blue/page001.html][hypertextbookshop]]/
+#+NAME: fig:rulesMaximals
+[[file:img/rulesCerrados.jpg]]
+Para terminar, estos dos conjuntos están relacionados, como muestra la figura \ref{fig:rulesCerrMax}, los maximales son un subconjunto de los cerrados.
+#+CAPTION: Relación entre Conjuntos Maximales y Cerrados. /Cred: Rafa Alcalá, prof. Reglas de Asociación/
+#+NAME: fig:rulesCerrMax
+[[file:img/rulesCerrMax.png]]
+** Generación de reglas
+A partir de los /itemsets/ frecuentes se generan todas las reglas posibles y solo se quedan las que superen los umbrales de confianza mínimo. Por lo general es preferible general reglas con un solo elemento en el consecuente (ABC $\rightarrow$ D), pero nada impide que exista más de un objeto en el consecuente, sin embargo, de este modo se generarán bastantes más reglas posibles. Como beneficio a generar reglas con un solo elemento en el consecuente se obtienen reglas más interpretables, ya que AB $\rightarrow$ CD $\equiv$ AB $\rightarrow$ C y AB $\rightarrow$ D.
+** Problemas abiertos
+Todo el contenido anterior es para reglas de *asociación binarias*, es decir, valores categóricos. Pero la mayoría de problemas reales contienen variables numéricas y las reglas no serán buenas. Para ello hay que dividir el domino de los atributos en intervalos, como se describió anteriormente (Puesto, Estudiante) etc y usar conjuntos difusos.
+
+En cuanto a las *medidas de calidad* para evaluar reglas de asociación se debe tener cuidado. Por lo general se deben usar varias medidas de calidad que se complementen a la hora de evaluar la calidad de una regla, estas medidas, entre otras son /lift, factor de certeza.../
+** Consejos
+Si al generar reglas hay /items/ con soporte demasiado altos es mejor no tener en cuanta dichos /items/. Por ejemplo, si un producto se compra el 100% de las veces, no merece la pena añadirlo a los /itemsets/, ya que no va a aportar información útil.
+
+Antes de comenzar un problema de reglas de asociación, lo más importante es tener claro qué queremos encontrar en los datos y conocer el problema presente.
+* Reglas de Asociación: Aspectos avanzados
+Uno de los problemas de las reglas de asociación es la interpretabilidad, estos pueden venir derivados de los datos en sí, de los usuarios o de las propias medidas de evaluación.
+
+*Los problemas derivados de los datos* residen en que hay varias formas de interpretar que si A $\rightarrow$ B en función de las medidas de calidad usadas. Al ser patrones en los datos, la calidad de la regla dependerá de igual modo de la calidad de los datos. Algunos problemas derivados de *los datos* son:
+
+- *falta de variabilidad*, /items/ muy frecuentes no aportan nada (Todos los clientes compran papel) o al contrario, /items/ poco frecuentes tampoco aportan nada.
+- La *representabilidad* de los datos, es decir, que no haya suficientes datos.
+- *Sesgos muestrales*, es necesario escoger los /items/ de forma aleatoria, no sesgarlos seleccionado compras de un periodo determinado, como las compras de enero, por ejemplo.
+
+Por otra parte, *los problemas derivados del usuario* pueden deberse a que no se dispone de un experto en el dominio del problema para interpretar y valorar las reglas. Aún cuando se dispone de un experto, pueden ocasionarse *confusiones semánticas* en las que se interpretan mal las reglas o los valores de confianza etc.
+
+Los *problemas derivados de las medidas*, las reglas con soportes muy altos tienden a ser dudosas, ya que su valor tan elevado puede deberse a una *falta de variabilidad* en los datos. De igual modo, *la confianza* no siempre es fiable, una regla con una confianza del 84% puede parece buena, pero aún teniendo una regla con máxima confianza (conf = 1) puede que los /items/ de A $\rightarrow$ B sean independientes.
+
+Para tratar de resolver estos problemas es necesario poder comparar la confianza de la regla con el soporte de su consecuente, dada A $\rightarrow$ B, $p(B|A)$ la confianza, $p(B)$ el soporte de B, es necesario comprar ambas medidas, ya que $p(B)$ es la probabilidad a priori, mientras que $p(B|A)$ es solo la probabilidad de las reglas en las que aparece A. Si la $Conf(A $\rightarrow$ B) = Sop(B)$ A y B son independientes y la regla no es representativa. Aunque la confianza por sí sola no vale para determinar si una regla es buena, sí que vale para descartar una regla mala.
+** Medidas de calidad
+Existen dos grupos de medidas de Interés, *objetivas* y *subjetivas*. Las primeras tienen fundamento estadístico, mientras que las subjetivas solo tienen en cuenta los datos.
+
+Entre las *medidas objetivas* se encuentran *La Confianza Confirmada*, establece hasta qué punto es útil A para predecir la presencia de B, la medida se da en un rango [-1, 1], donde 0 significa que son independientes, 1 dependencia total y -1 dependencia inversa (A predice \not B). *Lift* mide el nivel de interés, pero al ser simétrica mide asociaciones, no implicaciones, por lo cual no es buena para realizar comparaciones. *Convicción* detecta la independencia estadística entre /items/, al igual que *lift* no está acotada en su salida, por lo que no es muy fiable. El *factor de certeza* mide la incertidumbre del conocimiento, tiene su origen en los *sitemas expertos*, la ventaja frente a las dos medidas anteriores es que está acotada en rangos [-1,1], donde 0 significa independencia estadística. Existen más medidas, estas son solo unas pocas. Por lo general, el análisis de la regla depende de la medida a usar. Es necesario usar medidas en función de la semántica que se quiere medir.
+
+Las *medidas subjetivas* miden el interés de las reglas, suele ser necesaria la presencia de un experto que valore el interés de las mismas. Una de ellas es la *Utilidad*, en ella hay que tener en cuenta:
+- *Restricciones*: ¿Qué condiciones o qué contexto es necesario para que el patrón se cumpla?
+- *Tiempo de vida*: ¿Durante cuánto tiempo será útil la información dada por el patrón?
+- *Esfuerzo*: ¿Qué debemos hacer para actuar según nos muestre el patrón?
+- *Efectos laterales*: ¿Se puede prever algún efecto lateral?
+- *Impacto*: Desde la obtención del patrón, ¿se han producido cambios en la actualidad?
+- *Prontitud*: ¿Cuándo podemos actuar y utilizar la información que nos brinda el patrón?
+Las *reglas inesperadas* son otro tipo de medida subjetiva, son aquellas que contradicen las creencias del usuario, pueden ser interesantes o no.
+** Interpretaciones
+Esta sección se corresponde con el *marco formal* de las reglas de asociación, es decir, la definición teórica de las reglas, de forma abstracta. Para ello hay que asociar dicha abstracción con los datos, crear una asociación entre datos y reglas, es esto lo que genera una interpretación.
+
+La forma más común es tabular los datos en una estructura, por ejemplo (salario, alto) $\rightarrow$ (estudios, superiores), pero no es la única manera de representación. Se puede, por ejemplo, considerar la ausencia de datos con negaciones (\not A), esta representación es útil para el análisis de grupos de reglas.
+
+Otra forma de representación son las *reglas jerárquicas*, en esta representación se consideran grupos de /items/ a distintos niveles. Por ejemplo, si los /items/ son artículos de compra, un análisis a nivel de artículos individuales puede no dar información alguna. Sin embargo, a un nivel más alto se puedan extraer conclusiones útiles, un nivel más alto consiste en agrupar los distintos artículos según algún criterio (por marcas, por tipo de producto, tipos de pan, tipos de leche etc). De esta forma se establece una jerarquía en la que un /item/ está compuesto por los /items/ básicos y todas las categorias a las que pertenece, por ejemplo:
+$$\text{(zumo, naranja, marca, comida)}$$
+donde  /marca/ y /comida/ son categorías del /zumo/. En la figura \ref{fig:rulesHier} muestra un ejemplo.
+#+CAPTION: Ejemplo de reglas jerárquicas. /Créd. Apuntes de clase/
+#+NAME: fig:rulesHier
+[[file:img/rulesHier.png]]
+
+Las *reglas secuenciales* se usan cuando *existe un orden* prefijado en los /items/ de las transacciones. Ejemplos de reglas de este tipo son, si A,B y C aparecen en este *orden específico* $\rightarrow$ X. Este tipo de reglas son útiles para analizar textos, ya que se extraen reglas como {Minería}{de} $\rightarrow$ {Datos}, es decir, si se encuentra la palabra *Minería* seguida de *De* es muy probable que la siguiente palabra sea *datos*.
+
+Otro tipo de reglas son las *Cuantitativas*, usadas con datos estructurados, con dominios numéricos, el problema de estos dominios es su valor semántico y soporte bajo. Para ello, se comentó que es útil dividir el dominio en intervalos y generar  pares (atributo, intervalo) en lugar de (atributo, valor), estos /items/ deben estar ordenados. Los intervalos pueden se definidos por el experto para que puedan ser correctamente interpretados, o generarlos automáticamente.
+
+Las *dependencias aproximadas*  definen patrones en  bases de datos relacionales, corresponden a dependencias funcionales con excepciones, es decir, si se sabe que V se encuentra en una fila se sabe que W está en la misma fila. En esta interpretación las reglas extraidas tienen la semántica de la dependencia funcional, es decir, los /items/ son del tipo: Igualdad de variables en un par de tuplas.
+
+La última interpretación son las *dependencias graduales*, representan asociaciones entre la variación (incrementos o decrementos) en los valores de los atributos, representando así correlaciones positivas o negativas. Se puede comparar con las *dependencias aproximadas* en cuanto a que esta en lugar de determinar si los valores son iguales, determina si son mayores o menores.
+** Reglas de Asociación difusas
+Se usan para representar conceptos, por ejemplo, ¿cuando  es una persona alta?, si consideramos 180cm como alto, ¿una persona que mida 179,99 ya no es alta?, este es el problema que tratan los *conjuntos difusos*, la pertenencia o no de un elemento a un conjunto viene dada por un grado de certeza. La figura \ref{fig:ruleFuzzy1} muestra un ejemplo en el que se define el rango en el que aumenta si una persona es alta o no, pero presenta el problema comentado anteriormente. Otra forma de representarlo es mediante una función discontinua, como muestra la figura \ref{fig:ruleFuzzy2}, pero tampoco es ideal, lo mejor es una función gradual, como muestra la figura \ref{fig:ruleFuzzy3}
+#+CAPTION: Rango en la que una persona se considera como alta.
+#+NAME: fig:ruleFuzzy1
+[[file:img/ruleFuzzy1.jpg]]
+#+CAPTION: Rango en la que una persona se considera como alta.
+#+NAME: fig:ruleFuzzy2
+[[file:img/ruleFuzzy2.jpg]]
+#+CAPTION: Rango en la que una persona se considera como alta. Cuando la línea empieza a subir, aumenta el grado en el que se considera a una persona alta.
+#+NAME: fig:ruleFuzzy3
+[[file:img/ruleFuzzy3.jpg]]
+Las reglas difusas aparecen solo cuando se consideran *conjuntos difusos* para definir algún concepto con /items/, transacciones etc, son conjuntos continuos. En este tipo de reglas el soporte depende mucho de dónde se establecen los cortes que definen los intervalos. *Semánticamente* los intervalos no corresponden con el concepto (30 años es joven, pero 31 no). Para dar solución a este problema se usan conjuntos difusos con *funciones de pertenencia*, como muestra la figura \ref{fig:ruleFuzzy4}.
+#+CAPTION: Particiones difusas con función de pertenencia. Cabe destacar que pueden existir solapamientos (Región roja)
+#+NAME: fig:ruleFuzzy4
+[[file:img/ruleFuzzy4.jpg]]
+** Evaluación de reglas por grupos
+El análisis de las reglas de asociación suele realizarse de forma individual, estudiando su novedad y potencial utilidad en base a los itemsets que la componen, las medidas *objetivas y subjetivas* realizadas sobre ellas, y el conocimiento previo del experto. Sin embargo, el análisis de conjuntos de reglas definidos según ciertos criterios puede proporcionar más información, con ciertas ventajas. Por ejemplo, ¿qué ocurre si aparecen ambas reglas A $\rightarrow$ C y A $\rightarrow$ \not C? o A $\rightarrow$ C y \not C $\rightarrow$ \not A (contra recíproca), la última es lógicamente equivalente. Sin embargo, la logica formal y el conocimento de datos no son lo mismo, al buscar reglas en un conjunto de datos se puede deducir A $\rightarrow$ B, pero no se sabe nada sobre \not B $\rightarrow$ A. El motivo es que \not B $\rightarrow$ A no aparece en las transacciones, es decir, las transacciones de A $\rightarrow$ B son distintas a \not B $\rightarrow$ \not A, aunque sean lógicamente equivalentes, por ello es necesario mirarlas por separado. En el caso de que ambas aparezcan se proporciona más soporte empírico de que el patrón se cumple, lo cual ocurre siempre que existen reglas lógicamente equivalentes.
+
+* Bibligrafía
+- https://en.wikipedia.org/wiki/Minkowski_distance
+- https://en.wikipedia.org/wiki/Euclidean_distance
+- https://en.wikipedia.org/wiki/Taxicab_geometry
+- https://en.wikipedia.org/wiki/Chebyshev_distance
+- PangPang NingNing Tan, Tan,
+Michael Michael SteinbachSteinbach
+& & VipinVipin KumarKumar:p
+IntroductionIntroduction toto Data Data MiningMining
+AddisonAddison-WesleyWesley, 2006. , 2006.
+ISBN 0321321367ISBN 0321321367ISBN 0321321367 ISBN 0321321367
+[capítulos 8 [capítulos 8 -disponible en la webdisponible en la web- y 9]y 9]
+
+
+<figure>
+        <a href="/img/j">
+          <amp-img
+            on="tap:lightbox1"
+            role="button"
+            tabindex="0"
+            layout="responsive"
+            src="/img/j"
+            alt="j"
+            title="j"
+            sizes="(min-width: 900px) 900px, 100vw"
+            width="900"
+            height="788">
+          </amp-img>
+        </a>
+        <figcaption>j</figcaption>
+</figure>
