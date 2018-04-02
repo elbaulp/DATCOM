@@ -1,0 +1,322 @@
+---
+title: "Series"
+output: html_notebook
+author: "Alejandro Alcalde"
+---
+- Alejandro Alcalde Barros
+- algui91@correo.ugr.es
+- Ejercicio guiado. Curso 2017-2018
+
+
+```{r message=F, warning=F}
+rm(list = ls(all = T))
+require(tseries)
+require(fpp2)
+require(session)
+
+NPred <- 12 ## Valores a predecir
+NTest <- 12 ## Valores para test
+
+serie <- scan("./pasajeros_1949_1959.dat")
+(serie.ts <- ts(serie, frequency = 12))
+serie.ts.log <- log(serie.ts)
+serie.log <- log(serie)
+```
+
+# Análisis inicial de la serie
+
+```{r message=F, warning=F}
+ggplot2::autoplot(serie.ts)
+ggplot2::autoplot(decompose(serie.ts))
+```
+
+Observando la gráfica, parece que tiene una fuerte estacionalidad y una tendencia creciente, lo cual queda aún más remarcado al mostrar la serie descompuesta. El patrón estacional de la serie muestra muy poca variabilidad a lo largo del tiempo.
+
+```{r message=F, warning=F}
+forecast::ggseasonplot(serie.ts,
+                       year.labels = T,
+                       year.labels.left = T)
+```
+
+En la gráfica de estacionalidad de arriba se ve claramente cómo hay una tendencia creciente, ya que en cada año ha ido aumentando el número de pasajeros. Además se puede observar que a la vuelta del verano hay un descenso.
+
+```{r message=F, warning=F}
+forecast::ggseasonplot(serie.ts,
+                       polar = T)
+```
+
+Este tipo de gráfica muestra también cláramente la tendencia creciente del número de pasajeros por año.
+
+Para poder investigar más a fondo la estacionalidad, se muestra el siguiente gráfico:
+
+```{r message=F, warning=F}
+forecast::ggsubseriesplot(serie.ts)
+```
+
+Aquí se puede ver que en media se viaja más los meses de Junio, Julio y Agosto, y se ve claramente el patrón estacional en estos meses.
+
+Una gráfica mostrando los valores retrasados muestra una fuerte correlación entre los valores. Además, el gráfico Acf muestra claramente cómo hay tendencia, Debido a los valores de autocorrelación tan altos entre valores retrasados, así como la estacionalidad, que se refleja en la forma de escalera de los valores. Por todo esto, es necesario descomponer la serie y tratarla para convertirla en estacionaria.
+
+```{r message=F, warning=F}
+forecast::gglagplot(window(serie.ts))
+forecast::ggAcf(serie.ts)
+```
+
+# Preprocesamiento
+
+Observando de nuevo la gráfica de abajo, se aprecia que los datos tienen mucha varianza, por lo cual será necesario tratarlos, para ello se les aplica una transformación logarítmica.
+
+```{r message=F, warning=F}
+ggplot2::autoplot(decompose(serie.ts))
+ggplot2::autoplot(decompose(log(serie.ts)))
+
+serie.ts <- log(serie.ts)
+serie.log <- log(serie)
+```
+
+```{r message=F, warning=F}
+serie.ts %>%
+  stl(t.window=13, s.window="periodic", robust=TRUE) %>%
+  autoplot()
+```
+
+Hecho esto, pasamos a dividir en datos de entrenamiento y prueba.
+
+```{r message=F, warning=F}
+(serieTr <- serie.log[1:(length(serie.log) - NTest)])
+(tiempoTr <- 1:length(serieTr))
+(serieTs <- serie.log[(length(serie.log) - NTest + 1):length(serie)])
+(tiempoTs <- (tiempoTr[length(tiempoTr)] + 1) : (tiempoTr[length(tiempoTr)] + NTest))
+
+ggplot2::autoplot(ts(serieTr)) +
+    xlim(1, tiempoTs[length(tiempoTs)])
+#lines(tiempoTs, serieTs, col = "red")
+```
+
+# Tendencia o estacionalidad
+
+```{r message=F, warning=F}
+fit <- stl(serie.ts, t.window=13, s.window="periodic", robust=TRUE)
+
+fit %>% seasadj() %>% naive() %>% autoplot() + ylab("New orders index") +
+    ggtitle("Naive forecasts of seasonally adjusted data")
+
+fit %>% forecast(method="naive") %>% autoplot() + ylab("New orders index")
+```
+
+# Modelado de la tendencia
+
+```{r message=F, warning=F}
+parametros <- lm(serieTr ~ tiempoTr)
+
+ts(serieTr) %>%
+  ggplot2::autoplot() +
+    ylab("Consumption (quarterly % change)") +
+    xlab("Income (quarterly % change)") +
+    geom_smooth(method="lm", se = T)
+
+(TendEstimadaTr <- parametros$coefficients[1] + tiempoTr * parametros$coefficients[2])
+(TendEstimadaTs <- parametros$coefficients[1] + tiempoTs * parametros$coefficients[2])
+
+## Mostrar en la misma figura la serie y la tendencia estimada
+plot.ts(serieTr, xlim=c(1, max(tiempoTs)), ylim = c(min(serieTr), ceiling(max(serieTr))))
+lines(tiempoTr, TendEstimadaTr, col="blue")
+lines(tiempoTs, serieTs, col="red")
+lines(tiempoTs, TendEstimadaTs, col="green")
+```
+# Justificar Tendencia
+
+# PARA RESIDUALES: https://www.otexts.org/fpp2/residuals.html
+
+```{r message=F, warning=F}
+## Test de normalidad Jarque Bera
+(JB <- jarque.bera.test(parametros$residuals)) ## Lo pasa
+(JB <- jarque.bera.test((TendEstimadaTs - serieTs)))
+
+## Teest de student
+(TT <- t.test(c(parametros$residuals, TendEstimadaTs - serieTs)))
+```
+
+No se encuentran diferencias significativas en errores de ajuste (p-value 0.4158) y test (0.6442), luego el modelo lineal es factible y aceptamos, ya que no hay diferencias significativas entre los errores y una normal, asumimos que siguen una normal.
+
+Comprando las medias del error para ver si son similares en test y training, el test de Student no muestra diferenias significativas, por tanto se puede usar el modelo lineal.
+
+Ahora eliminamos la tendencia en la serie:
+
+```{r message=F, warning=F}
+## Eliminar tendencia
+serieTr.SinTend <- serieTr - TendEstimadaTr
+serieTs.SinTend <- serieTs - TendEstimadaTs
+plot.ts(serieTr.SinTend, xlim = c(1, tiempoTs[length(tiempoTs)]))
+lines(tiempoTs, serieTs.SinTend, col = "red")
+```
+
+Ahora elminar estacionalidad, se asume estacionalidad anual, al leer los datos con esa frecuencia más arriba. Para eliminar estacionliad se usa la función decompose.
+
+```{r message=F, warning=F}
+## Calcular y elimmniar estacionliad
+k <- 12
+(estacionalidad <- decompose(serie.ts.log)$seasonal[1:k])
+
+## Eliminamos estacionalidad para el modelo
+aux <- rep(estacionalidad, length(serieTr)/length(estacionalidad))
+serieTr.SinTend.SinEst <- serieTr.SinTend -  aux
+
+serieTs.SinTend.SinEst <- serieTs.SinTend - estacionalidad
+plot.ts(serieTr.SinTend.SinEst, xlim = c(1, tiempoTs[length(tiempoTs)]))
+lines(tiempoTs, serieTs.SinTend.SinEst, col = "red")
+```
+
+Ya tenemos la serie sin tendencia ni estacionlidad, comprobamos si es estacionaria antes de seguir.
+
+```{r message=F, warning=F}
+## El test falla, diferenciamos
+(ADFTr <- adf.test(serieTr.SinTend.SinEst))
+serieTr.SinTend.SinEst.Diff <- diff(serieTr.SinTend.SinEst)
+serieTs.SinTend.SinEst.Diff <- diff(serieTs.SinTend.SinEst)
+## Aplicamos el test de nuevo
+(adftest.H1 <- adf.test(serieTr.SinTend.SinEst.Diff))
+## Ahora ya sí sale correcto
+```
+
+Ya que el p-value del adf.test falla, ya que se obtiene un valor de 0.64, por tanto no es estacionaria. Tras aplicar la diferenciación ya tenemos serie estacionaria, visualizamos ACF y PACF para dar hipótesis de modelos.
+
+```{r message=F, warning=F}
+acf(serieTr.SinTend.SinEst.Diff)
+pacf(serieTr.SinTend.SinEst.Diff)
+```
+
+Los resultados del acf y pacf son típicos de modelos autoregresivos. Se puede usar un ARIMA(4, 1, 0), por ser un modelo autoregresivo de orden 4 y habiendo diferenciado una vez.
+
+```{r message=F, warning=F}
+# Ajustar el modelo
+(modelo <- forecast::Arima(serieTr.SinTend.SinEst, order=c(4,1,0)))
+valoresReconstruidos <- serieTr.SinTend.SinEst + modelo$residuals
+
+## Calcular las predicciones
+(Predicciones <- predict(modelo, n.ahead = NPred))
+(valoresPredichos <- Predicciones$pred)
+
+## Calculamos el error cuadratico acumulado del ajuste, en ajuste y test
+(errorTr <- sum((modelo$residuals)^2))
+(errorTs <- sum((valoresPredichos - serieTs.SinTend.SinEst)^2))
+```
+
+Mostrar los resultados
+
+```{r message=F, warning=F}
+## Plot ajuste y predicción en test
+plot.ts(serieTr.SinTend.SinEst, xlim = c(1, tiempoTs[length(tiempoTs)]))
+lines(valoresReconstruidos, col = "blue")
+lines(tiempoTs, serieTs.SinTend.SinEst, col = "red")
+lines(tiempoTs,valoresPredichos, col = "green")
+```
+
+Si analizamos el ADF y PACF anterior vemos que los valores anteriores tienen muy poca importancia, y la serie parece ser ruido blanco.
+
+Validamos el modelo a continuación:
+
+```{r message=F, warning=F}
+## Test para selección del modelo y validación
+(boxtest <- Box.test(modelo$residuals)) ## Lo pasa
+## Test de normalidad de Jarque Bera
+(JB <- jarque.bera.test(modelo$residuals)) ## Lo pasa
+## Test normalidad Shapiro-Wilk
+(SW <- shapiro.test(modelo$residuals)) ## Lo pasa
+
+checkresiduals(modelo$residuals)
+```
+
+Como se pasa el test de Box, los residuos son aleatorios, y por tanto válido. También se puede asumir la normalidad de los residuos con el test de Jarque bera, y también con el de shapiro. El histograma de los residuos del modelo muestra visualmente que lo anterior se cumple.
+
+```{r message=F, warning=F}
+## Deshacemos los cambios realizados para calcular predicciones reales
+valoresReconstruidos.Est <- valoresReconstruidos + aux ## Estacionalidad
+valoresPredichos.Est <- valoresPredichos + estacionalidad
+
+valoresReconstruidos.Est.Tend <- valoresReconstruidos.Est + TendEstimadaTr
+valoresPredichos.Est.Tend <- valoresPredichos.Est  + TendEstimadaTs
+
+valoresReconstruidos.Est.Tend.exp <- exp(valoresReconstruidos.Est.Tend)
+valoresPredichos.Est.Tend.exp <- exp(valoresPredichos.Est.Tend)
+
+plot.ts(serie)
+lines(tiempoTr, valoresReconstruidos.Est.Tend.exp, col="blue")
+lines(tiempoTs, valoresPredichos.Est.Tend.exp, col="green")
+```
+
+Si tuviesemos disponibles datos correctos de la predicción, podemos comprobar
+
+```{r message=F, warning=F}
+serieEntera<-serie.log #cogemos toda la serie
+tiempo<-1:length(serieEntera)
+parametros<-lm(serieEntera~tiempo) #Ajustamos modelo de tendencia
+TendEstimada<-parametros$coefficients[1]+tiempo*parametros$coefficients[2]
+serieSinTend<-serieEntera-TendEstimada
+aux<-ts(serieEntera,frequency=12)
+aux<-decompose(aux)$seasonal
+estacionalidad<-as.numeric(aux[1:12])
+aux<-rep(estacionalidad,length(serieSinTend)/length(estacionalidad))
+serieSinTendEst<-serieSinTend-aux
+modelo<-arima(serieSinTendEst,order=c(4,1,0))
+valoresAjustados <- serieSinTendEst+modelo$residuals
+Predicciones<-predict(modelo,n.ahead=NPred)
+valoresPredichos<-Predicciones$pred
+
+valoresAjustados <- valoresAjustados+aux;
+valoresPredichos <- valoresPredichos-estacionalidad;
+
+valoresAjustados <- valoresAjustados+TendEstimada;
+tiempoPred <- (tiempo[length(tiempo)]+(1:NPred))
+TendEstimadaPred <- parametros$coefficients[1]+tiempoPred*parametros$coefficients[2]
+valoresPredichos <- valoresPredichos+TendEstimadaPred;
+
+valoresAjustados <- exp(valoresAjustados)
+valoresPredichos <- exp(valoresPredichos)
+
+plot.ts(serie, xlim=c(1, max(tiempoPred)),ylim=c(100,650))
+lines(valoresAjustados, col="blue")
+lines(valoresPredichos, col="red")
+
+predecir <- function(){
+    serieEntera<-serie.log #cogemos toda la serie
+    tiempo<-1:length(serieEntera)
+    parametros<-lm(serieEntera~tiempo) #Ajustamos modelo de tendencia
+    TendEstimada<-parametros$coefficients[1]+tiempo*parametros$coefficients[2]
+    serieSinTend<-serieEntera-TendEstimada
+    aux<-ts(serieEntera,frequency=12)
+    aux<-decompose(aux)$seasonal
+    estacionalidad<-as.numeric(aux[1:12])
+    aux<-rep(estacionalidad,length(serieSinTend)/length(estacionalidad))
+    serieSinTendEst<-serieSinTend-aux
+    modelo<-arima(serieSinTendEst,order=c(4,1,0))
+    valoresAjustados <- serieSinTendEst+modelo$residuals
+    Predicciones<-predict(modelo,n.ahead=NPred)
+    valoresPredichos<-Predicciones$pred
+
+    valoresAjustados <- valoresAjustados+aux;
+    valoresPredichos <- valoresPredichos-estacionalidad;
+
+    valoresAjustados <- valoresAjustados+TendEstimada;
+    tiempoPred <- (tiempo[length(tiempo)]+(1:NPred))
+    TendEstimadaPred <- parametros$coefficients[1]+tiempoPred*parametros$coefficients[2]
+    valoresPredichos <- valoresPredichos+TendEstimadaPred;
+
+    valoresAjustados <- exp(valoresAjustados)
+    valoresPredichos <- exp(valoresPredichos)
+
+    plot.ts(serie, xlim=c(1, max(tiempoPred)),ylim=c(100,650))
+    lines(valoresAjustados, col="blue")
+    lines(valoresPredichos, col="red")
+
+    Predicciones
+}
+
+## Cargar datos reales
+predReales <- scan("./pasajeros_1960.predict")
+lines(tiempoPred, predReales, col = "green")
+
+predicciones <- predecir()$pred
+## Calculamos el error media
+(ErrorMedio <- sum(abs(predReales - predicciones)))
+```
