@@ -1,0 +1,1067 @@
+---
+title: "Trabajo práctico integrador"
+author: "Alejandro Alcalde"
+output: html_notebook
+---
+
+```{r echo=F, include=F}
+knitr::opts_chunk$set(comment = NA,
+                      message = F,
+                      warning = F)
+
+require(Hmisc)
+require(dplyr)
+require(ggplot2)
+require(moments)
+require(gridExtra)
+require(grid)
+require(dplyr)
+require(GGally)
+require(reshape2)
+require(caret)
+require(DMwR)
+require(kknn)
+
+ggplot2::theme_set(theme_minimal())
+```
+
+# Análisis de Datos
+
+## Clasificación (Haberman)
+
+### A.1 Descripción  del tipo de datos de entrada
+
+Este conjunto de datos trata sobre pacientes que han sobrevivido a una operación de cáncer de mama. La primera columna es la edad del paciente, la segunda el año de operación, en formato `año - 1900`, tercera número de nodos auxiliares detectados y por último si el paciente sobrevivió 5 años o más, o murió en menos de 5 años.
+
+```{r}
+haberman <- read.csv("./data/Datasets Clasificacion/haberman/haberman.dat",
+                     comment.char = "@")
+colnames(haberman) <- c("Age", "YearOfOperation", "nodes", "survival")
+str(haberman)
+dim(haberman)
+sum(is.na(haberman))
+```
+
+La salida de `str` muestra que las tres primeras columnas son de tipo entero, y la variable respuesta de tipo factor. En dicha variable, un 1 corresponde a que el paciente sobrevive 5 años o más, 2 que muere a los 5 años. Este conjunto de datos tiene 305 instancias, con 4 variables, y sin ningún valor perdido.
+
+### A-2. Cálculo de media, desviación estándar, etc.
+
+```{r}
+summary(haberman)
+length(which(haberman$nodes == 0))
+```
+
+El análisis de una sola variable muestra  que el rango de edad de los pacientes es de 30 a 83 años, el el 25% de los pacientes tienen menos de 44 años, mientras que la mediana esta en los 52, ya que la mediana y la media son muy similares, se deduce que la distribución de esta variable es simétrica. El 75% de los pacientes tienen menos de 61 años. La variable que registra el año de operación parece tener unas características similares, una distribución simétrica con valores comprendidos entre 58 y 69. El número de nodos no parece seguir una distrubución tan simétrica, ya que la media y la mediana difieren. El 75% de los datos corresponde con 4 nódulos o menos, y a partir de este percentil el número de nódulos detectados se dispara hasta un máximo de 52, siendo los 5 valores más altos 28, 30, 35, 46 y 52. Esta variable no está balanceada, ya que casi la mitad de los datos tienen valor 0. La variable indicando si el paciente sobrevive más de 5 años o no esta bastante desequilibrada, hay muchos más casos negativos que positivos.
+
+```{r}
+sapply(haberman[, -4], sd)
+sapply(haberman[, -4], var)
+sapply(haberman, IQR)
+sapply(haberman[, -4], skewness)
+sapply(haberman[, -4], kurtosis)
+```
+
+La desviación estándar para la edad es baja, unos 10 años, lo cual quiere decir que los datos están más o menos concentrados en la media. El año de operación tiene una desviación de 3 años, el número de nódulos está en torno a 7, es posible que esta desviación típica sea algo más alta debido a los datos a partir del percentil .75, ya que hasta ese percentil el número de nódulos en inferior a 4, pero el máximo es de 52.
+
+El rango intercuartil (IQR) es una medida más robusta que la desviación estándar y la varianza, ya que los datos por encima o por debajo de los cuartiles pueden moverse a cualquier distancia de la mediana sin afectar al IQR. El IQR para la edad es de 17 años, ya que el primer cuartil es 44 años y el tercero 61, este valor indica que el 50% de los datos se encuentran en ese rango de edades. El año de operación tiene un IQR de 6, el 50% de las operaciones se realizaron con una diferencia de 6 años, concretamente entre el año 1966 y 1960. El IQR para los nódulos detectados es de 4, aunque esta variable no está correctamente balanceada, el 50% de sus datos están entre 0 y 4 nódulos detectados.
+
+El _skewness_ indica la simetría de la distribución, el _skew_ para la edad de los pacientes confirma la suposición que se hizo al ser la media y la mediana similares, es decir, esta distribución es simétrica. Con el año de operación ocurre algo similar, ya se anticipó la simetría de esta distribución al observar que la media y la mediana eran similares. Por contra, el número de nódulos es bastante asimétrico, concretamente está sesgada positivamente, tiene la cola hacia la derecha.
+
+En cuanto a los valores de _kurtosis_, que mide cómo de puntiaguda/achatada es la distribución con respecto a la Gaussiana. Para la edad la kurtosis está cercana a 3, lo cual indica que más o menos sigue una distribución normal, junto con el valor del sesgo anterior, confirmamos que es simétrica. El año de operación tiene una kurtosis bastante inferior a 3, con unas colas muy alargadas, esto indica la presencia de outliers. Por último, el número de nódulos posee un número muy por encima de 3 para kurtosis, con esto confirmamos lo que se mencionó más arriba, esta variable está muy desequilibrada y con muchos outliers. A continuación se muestran los histogramas que confirman visualmente lo anteriormente dicho.
+
+### A-3. Gráficos que permitan visualizar los datos adecuadamente.
+
+```{r}
+h1 <- ggplot2::ggplot(haberman, aes(x = Age)) + geom_histogram(binwidth = 5)
+h2 <- ggplot2::ggplot(haberman, aes(x = YearOfOperation)) +
+    geom_histogram(binwidth = 3)
+h3 <- ggplot2::ggplot(haberman, aes(x = nodes)) + geom_histogram()
+gridExtra::grid.arrange(h1, h2, h3, nrow = 2,
+                        top = textGrob("Histogramas de Haberman",
+                                       gp=gpar(fontsize=20)))
+```
+
+Se muestran también los _boxplots_, junto con una gráfica de barras para la variable categórica:
+
+```{r}
+bp1 <- ggplot2::ggplot(haberman, aes(1, Age)) + geom_boxplot()
+bp2 <- ggplot2::ggplot(haberman, aes(1, YearOfOperation)) + geom_boxplot()
+bp3 <- ggplot2::ggplot(haberman, aes(1, nodes)) + geom_boxplot()
+bar <- ggplot2::ggplot(haberman, aes(survival)) + geom_bar()
+gridExtra::grid.arrange(bp1, bp2, bp3, bar, nrow = 2)
+```
+
+Las gráficas de arriba confirman todo lo dicho anteriormente, en el número de nódulos se ve con claridad que hay bastantes outliers por encima. En cuanto a la variable _survival_, se aprecia cláramente el no balanceo de los datos.
+
+Se realiza ahora un análisis multivariado del conjunto de datos.
+
+```{r}
+GGally::ggpairs(haberman)
+```
+
+En el _scatterplot_ de arriba, se aprecian varias particularidades:
+
+En la diagonal, se puede identificar la distribución de cada una de las variables, que coinciden con lo explicado en apartados anteriores, por ejemplo, se ve el desplazamiento hacia la derecha del número de nódulos. El resto de gráficas representa todas las variables frente a todas en pares. No se puede sacar mucho en claro sobre las relaciones existentes entre ellas, ya que no tienen correlaciones.
+
+Puede ser interesante observar los boxplots de la variable de salida frente al resto:
+
+```{r}
+haberman.m <- melt(haberman, id.vars = "survival")
+p <- ggplot2::ggplot(data = haberman.m, aes(x=variable, y=value))
+p <- p + geom_boxplot(aes(fill=survival))
+p <- p + facet_wrap(~ variable, scales="free")
+p <- p + ggtitle("Survival vs resto")
+p <- p + guides(fill=guide_legend(title="Survival"))
+p
+```
+
+Del primer par de boxplots se deduce que el grupo de los pacientes que sobrevive más de cinco años es de mayor edad que los que no sobreviven. El año de operación no parece ser relevante. El número de nódulos para el caso negativo tiene tantos outliers porque contiene muchos ceros, hay 117 pacientes con cero nódulos que no sobrevivieron más de 5 años, esto desforma bastante la distribución.
+
+### Descripción del conjunto de datos a partir de los puntos anteriores.
+
+Se ha ido describiendo el conjunto de datos conforme se ha realizado el análisis exploratorio de datos. Como conclusión se puede decir que a simple vista no parece que exista ninguna variable lo suficientemente descriptiva para explicar si un paciente sobrevivirá más de cinco años o no. Quizá haya que hacer transformaciones a las variables, y combinarlas unas con otras.
+
+
+# Apartado de Clasificación
+
+## Algoritmo K-NN con varios valores de k
+
+```{r}
+set.seed(3456)
+haberTrainIndex <- createDataPartition(haberman$survival, p = .9,
+                                  list = F,
+                                  times = 1)
+habermanTrain <- haberman[haberTrainIndex, ]
+habermanTest <- haberman[-haberTrainIndex, ]
+table(habermanTrain$survival)
+
+habermanTrain <- habermanTrain %>% dplyr::select(-YearOfOperation)
+habermanTest <- habermanTest %>% dplyr::select(-YearOfOperation)
+
+habermanTrainDownSampled <- downSample(x = habermanTrain[, -ncol(habermanTrain)],
+                                       y = habermanTrain$survival,
+                                       yname = "survival")
+
+
+
+#habermanTrainDownSampled <- SMOTE(survival ~ .,
+#                                  habermanTrain)
+table(habermanTrainDownSampled$survival)
+
+
+fitControl <- trainControl(method = "repeatedcv",
+                           number = 10,
+                           repeats = 10)
+knnGrid <- expand.grid(k = 2:15)
+# For example, in problems where there are a low percentage of samples
+# in one class, using metric = "Kappa" can improve quality of the final model.
+knnModel <- train(survival ~ .,
+                  data = habermanTrainDownSampled,
+                  method = "knn",
+                  preProcess = c("center", "scale"),
+                  trControl = fitControl,
+                  tuneGrid = knnGrid,
+                  metric = "Kappa")
+knnModel
+knnPredict <- predict(knnModel, habermanTest)
+(knnacc <- postResample(pred = knnPredict,
+             obs = habermanTest$survival))
+```
+
+Debido a que la variable `survival` está bastante desequilibrada, se han aplicado varias técnicas de _subSampling_  y _downSampling_. Tras varias pruebas, el mejor resultado se obtenía aplicando la técnica de _resampling_ _SMOTE_, sin embargo, se producia algo de sobre ajuste, teniendo una tasa de acierto en entrenamiento del 78% y del 71% en test. Por tanto, el modelo final se ha escogido usando técnicas de _downSample_ para las que se han obtenido tasas de acierto del 70.6% en entrenamiento y 70% en test, sin nada de sobreajuste. También se ha descartado la variable `YearOfOperation`, ya que no aporta nada al modelo. El criterio para escoger el mejor `k` ha sido guiarse por el valor de _kappa_, ya que para conjuntos de datos con pocas instancias suele dar mejores resultados.
+
+## Utilizar el algoritmo LDA para clasificar.
+
+```{r message=F, warning=F}
+set.seed(3456)
+
+ldaModel <- train(survival ~ .,
+                  data = habermanTrain,
+                  method = "lda",
+                  preProcess = c("center", "scale"),
+                  trControl = fitControl,
+                  metric = "Kappa")
+ldaModel
+ldaPredict <- predict(ldaModel, habermanTest)
+(ldaAcc <- postResample(pred = ldaPredict,
+             obs = habermanTest$survival))
+```
+
+## Utilizar el algoritmo QDA para clasificar.
+
+```{r message=F, warning=F}
+set.seed(3456)
+
+qdaModel <- train(survival ~ .,
+                  data = habermanTrain,
+                  method = "qda",
+                  preProcess = c("center", "scale"),
+                  trControl = fitControl,
+                  metric = "Kappa")
+qdaModel
+ldaPredict <- predict(qdaModel, habermanTest)
+(qdaAcc <- postResample(pred = ldaPredict,
+             obs = habermanTest$survival))
+```
+
+
+## Comparar los resultados de los tres algoritmos.
+
+```{r message=F, warning=F}
+resultados <- read.csv("./data/results/clasif_test_alumos.csv")
+tablatst <- cbind(resultados[,2:dim(resultados)[2]])
+colnames(tablatst) <- names(resultados)[2:dim(resultados)[2]]
+rownames(tablatst) <- resultados[,1]
+tablatst[6, ] <- c(knnacc[[1]], ldaAcc[[1]], qdaAcc[[1]])
+friedman <- friedman.test(as.matrix(tablatst))
+friedman
+```
+
+El test de friedman muestra que no existen diferencias significativas entre ningún algoritmo, luego no haría falta hacer Holm.
+
+## Regresión (House)
+
+### A.1 Descripción  del tipo de datos de entrada (lista, data frame, ect., numero de filas, columnas, tipo de datos atómicos, etc.)
+
+```{r message=F, warning=F}
+house <- read.csv("./data/Datasets Regresion/house/house.dat",
+                  comment.char = "@")
+colnames(house) <- c("P1", "P5p1", "P6p2", "P11p4", "P14p9", "P15p1", "P15p3",
+                     "P16p2", "P18p2", "P27p4", "H2p2", "H8p2", "H10p1", "H13p1",
+                     "H18pA", "H40p4",  "price")
+str(house)
+dim(house)
+sum(is.na(house))
+```
+
+Este conjunto de datos tiene 22783 registros, con 17 variables cada uno, no tiene valores perdidos. De las 17 variables, 15 son de tipo numérico y dos de tipo entero, entre ellas la variable a predecir, el precio de la casa. No se tienen datos de lo que significa cada variable.
+
+### A-1. Cálculo de media, desviación estándar, etc.
+
+```{r message=F, warning=F}
+summary(house)
+head(table(house$P6p2))
+a <- table((house$P11p4))
+a[a > 50]
+ggplot2::ggplot(house, aes(x = P15p3)) + geom_histogram()
+head(table(house$P15p3))
+head(table(house$P18p2))
+describe(house$P18p2)
+ggplot2::ggplot(house, aes(x = price)) + geom_histogram()
+```
+
+Se comienza el análisis con realizando un estudio para cada una de las variables por separado. La variable `P1`.  La diferencia entre el valor mínimo y máximo de esta variable es muy grande, y posiblemente este sesgada hacia números pequeños, ya que el 75% de los datos es menor de 4518, como indica el tercer cuartil. La media y la mediana son muy dispares, por lo que se puede deducir que no es una distribución simétrica, esto refuerza el argumento de que la distribución este sesgada hacia números grandes. El resto de variables predictoras están en el rango [0, 1]. `P5p1` tiene una media y mediana prácticamente iguales, luego debe ser simétrica, aunque quizá tenga un sesgo negativo. `P6p2` tiene media y mediana distantes, luego no va a ser simétrica, la gran mayoría de sus datos son menores a 0.03 y el valor máximo es 1, luego se puede pensar que esta variable está sesgada hacia números pequeños, ya que el 75% de sus valores son inferiores a 0.03. Esta variable además tiene casi la mitad de sus valores a cero, de 22700 registros, en esta variable 7396 son iguales a cero, mientras que para el resto de valores se repiten solamente una o dos veces, como se muestra en la salida de la tabla de arriba. A `P11p4` parece pasarle lo mismo que a la anterior, gran parte de sus datos están acumulados en valores pequeños, tiene 52 valores a cero, sin embargo la distribución parece se simétrica, parece estar sesgada positivamente. `P14p9` también tiene una distribución más o menos simétrica, por sus similitudes entre media y mediana, pero casi todos los datos están concentrados en valores pequeños, luego está algo sesgada positivamente. `P15p1` es simétrica, pero al contrario que las anteriores, está sesgada negativamente, con muchos más valores a 1 que a cualquier otro. `P15p3` está muy sesgada positivamente, con más del doble de los datos con valor cero. `P16p2` es simétrica, pero ligeramente sesgada negativamente. `P18p2` tiene 7465 datos con valor cero, y el 95% de sus datos es inferior a 0.011. A `P27p4` le ocure lo mismo, muchos valores a cero y sesgada positivamente. `H2p2` y `H8p2` tienen características similares a las anteriores, muchos valores a cero y sesgadas positivamente. Sin embargo a `H10p1` le ocurre lo contrario, muchos valores a 1, y sesgada negativamente. `H13p1` parece seguir una normal sesgada positivamente. `H18pA` de nuevo tiene muchos valores a cero y está sesgada positivamente. `H40p4` parece seguir una normal, pero tiene muchos valores a cero y a 1. Por último, `Price` tiene 52 casas con un precio medio de 0, lo cual seguramente sean errores, y 47 casas con un precio de 500001. Esta variable no es simétrica, y está sesgada positivamente. Es razonable pensar que hay más casas de un valor bajo, mediano, que altas, por eso la distribución está sesgada positivamente. Como conclusión final a este primer vistazo a los datos, es posible que las variables que tienen tantos ceros y tantos unos sean errores de medición, o datos perdidos.
+
+```{r message=F, warning=F}
+summary(house)
+sapply(house, sd)
+sapply(house, IQR)
+sapply(house, skewness)
+sapply(house, kurtosis)
+```
+
+`P1` tiene una desviación estándar muy grande, esto se debe a lo que se comentó más arriba, está sesgada hacia números muy grandes. Para el resto de variables salvo `price`, la desviación es ínfima, esto es debido a la cantidad de ceros o unos que poseen la mayoría de las variables, como se comentó en el párrafo anterior, casi todas las variables tienen muchos valores a cero o en su entorno, o iguales a uno o en su entorno. Por último, `price` sí tiene una desviación considerable, es lógico teniendo en cuenta el análisis del párrafo anterior.
+
+El IQR puede confirmarnos que algunas de las distribuciones de las variables no son normales. Esto ocurre cuando el valor IQR es elevado, ya que implica que hay un rango grande entre el primer y tercer cuartil. Según el cálculo IQR para cada una de las variables, `P1` no es normal, ya que posee un IQR muy elevado. A `price` le ocurre lo mismo. Del resto de variables no se puede afirmar que sean o no normales, ya que tienen valores pequeños.
+
+Se procede ahora al análisis del _skewness_ para contrastar lo presupuesto sobre la simetría de las distribuciones de las variables. Está claro que con un valor de 72.74, `P1` es definitívamente asimétrica. Para las variables con un _skewness_ comprendido en [-3,3] aproximadamente, no se puede afirmar si son o no simétricas, las que están fuera de este rango confirman que son asimétricas, estas son: `P6p2, P15p3, P18p2, P27p4, H2p2, H8p2, H10p1, price`.
+
+Continuando con _kurtoris_, y ya que lo que más aporta a esta medida son las colas de la distribución, puede servir para ver si la distribución de las variables tienen colas más delgadas o gruesas, una cola más gruesa quiere decir que hay más probabilidad de tener outliers. Se aprecia gráficamente con los boxplots de abajo. Todas las variables salvo `H40p4`, aunque esta variable ya se comentó antes que aunque parece ser normal, tiene muchos valores tanto a cero como a uno. Es posible ver la cantidad de outliers en las gráficas de abajo.
+
+```{r message=F, warning=F}
+house %>%
+    dplyr::select(-P1, -price) %>%
+    melt %>%
+    ggplot2::ggplot(aes(x = variable, y = value)) + geom_boxplot()
+house %>%
+    dplyr::select(P1, price) %>%
+    melt %>%
+    ggplot2::ggplot(aes(x = variable, y = value)) + geom_boxplot()
+```
+
+Finalizado el estudio de una sola variable, se comienza con el análisis multivariante:
+
+
+```{r pairs, message=F, warning=F}
+#GGally::ggpairs(house)
+#pairs(house)
+
+ihs <- function(x) {
+    y <- log(x + sqrt(x ^ 2 + 1))
+    return(y)
+}
+gridExtra::grid.arrange(ggplot2::ggplot(house, aes(P1, P5p1)) + geom_point(),
+                        ggplot2::ggplot(house, aes(I(log1p(P1)), P5p1)) + geom_point(),
+                        ggplot2::ggplot(house, aes(log1p(P1), P5p1)) + geom_point())
+```
+
+Haciendo un scatterplot de todas las variables con todas se aprecian algunos patrones, al igual que correlaciones entre algunas variables. De las muy correladas se puede eliminar una de ellas para el posterior uso en el modelo. Por ejemplo, `H8p2` y `P6p2` están totalmente correladas, se puede decidir eliminar una de ellas. `P14p9` y `P11p4` tambén están correladas, aunque en menor medida (0.78). Estas son las únicas dos correlaciones fuertes que existen, y quizá la última no es suficientemente fuerte como para poder descartar una de las dos variables. Además de las correlaciones, en el scatterplot se aprecia perfectamente cómo muchas de las variables hacen que los datos vayan hacia el cero, esto indica que quizá venga bien realizar alguna transformación a las variables.
+
+```{r plotY, message=F, warning=F}
+# temp <- house
+# plotY <- function (x,y) {
+#     plot(temp[,y]~temp[,x], xlab=paste(names(temp)[x]," X",x,sep=""),
+#          ylab=names(temp)[y])
+# }
+# par(mfrow=c(4,4))
+# x <- sapply(1:(dim(temp)[2]-1), plotY, dim(temp)[2])
+# par(mfrow=c(1,1))
+```
+
+Examinando detenidamente todas las variables respecto a la de salida, se observan algunos patrones, `P1` parece ser candidata a una transformación logarítmica.
+
+```{r message=F, warning=F}
+plot(log(house$price) ~ log(house$P1))
+```
+### Descripción del conjunto de datos a partir de los puntos anteriores.
+
+Tras realizar el análisis, se concluye que este conjunto de datos no es nada lineal, por lo que será necesario realizar transformaciones a las variables al aplicar los modelos de regresión. No hay variables relacionadas entre sí prácticamente y las distribuciones de las variables suelen estar sesgadas positivamente, con muchos valores en los extremos (o ceros o unos), por lo que presentan muchos outliers.
+
+## Regresión Lineal Simple
+
+Se deben elegir cinco variables de las 16 de este conjunto de datos. Según el scatterplot de más arriba, `P1` es una buena candidata, ya que al aplicarle una transformación logarítmica se consigue hacerla lineal respecto a la variable a predecir. En el apartado de correlación se vio que `H8p2` y `P6p2` están totalmente correladas, se puede seleccionar una de estas dos variables para el modelo, ya que siguen un patrón claro. Otra variable con un patrón marcado es `P5p1`. Del resto de variables no se observan patrones muy destacados, quizá para `P18p2` se pueda realizar otra transformación, y por último es posible que `H10p1` también sea de utilidad. En resumen, se eligen las siguientes variables: `P1, H8p2, P5p1, P18p2, H10p1`
+
+
+```{r message=F, warning=F}
+#apply(house, 2, function(x.col) summary(lm(price ~ x.col, data = house)))
+
+
+
+
+
+ihs <- function(x) {
+    y <- log(x + sqrt(x ^ 2 + 1))
+    return(y)
+}
+```
+
+Se procede a analizar cada uno de los modelos de forma individual:
+
+```{r}
+showModel <- function(y, x, model, trans = identity) {
+    plot(x, y, pch = 19)
+
+    abline(a = model$coefficients[[1]],
+           b = trans(model$coefficients[[2]]),
+           lwd = 2,
+           col = "red")
+
+    par(mfrow = c(2,2))
+    plot(model, pch = 19)
+    par(mfrow = c(1,1))
+}
+
+fit1 <- lm(price ~ log(P1), data = house)
+summary(fit1)
+showModel(house$price, house$P1, fit1, log)
+```
+
+El error para este modelo es bastante malo (48990), pero se consigue mejorar con la transformación logarítmica sobre `P1`, el $R^2$ del modelo in la transformación era tan solo de 0.005, mientras que con la transformación aumenta al 0.14, lo cual quiere decir que conseguimos explicar el 14% de los datos del precio con la transformación logarítmica. Sin embargo aún no se consigue que los datos sean lineales, como muestra el qqplot.
+
+```{r}
+fit2 <- lm(price ~ H8p2, data = house)
+summary(fit2)
+showModel(house$price, house$H8p2, fit2)
+plot(house$H8p2, house$price)
+```
+
+Para fit2 el error es más alto que para el modelo anterior, 52650 y su $R^2$ es demasiado bajo, 0.007, este modelo puede ser descartado.
+
+```{r}
+fit3 <- lm(price ~ P5p1, data = house)
+summary(fit3)
+showModel(house$price, house$P5p1, fit3)
+plot(house$H8p2, house$price)
+```
+
+Este modelo es muy similar al anterior. Puede ser descartado
+
+```{r}
+fit4 <- lm(price ~ P18p2, data = house)
+summary(fit4)
+showModel(house$price, house$P18p2, fit4)
+plot(house$P18p2, house$price)
+```
+
+Con este modelo pasa algo similar, un gran error y muy poco $R^2$.
+
+```{r}
+fit5 <- lm(price ~ H10p1, data = house)
+summary(fit5)
+showModel(house$price, house$P18p2, fit5)
+plot(house$P18p2, house$price)
+```
+
+Le ocurre lo mismo. Como conclusión podemos sacar que el modelo lineal de una sola variable no es para nada viable, ya que no pueden explicar casi nada de la variable a predecir. Tan solo se ha podido aplicar una transformación a `P1`, ya que el resto tienen valores iguales a cero y no se les puede aplicar un logaritmo. Vale la pena mencionar sin embargo, que todas las variables en los modelos tienen un p-valor muy bajo. Además, en las gráficas QQ se deja en evidencia la no normalidad de los datos.
+
+Como modelo final, el mejor es el primero, usando la variable P1.
+
+## Regresión Lineal Múltiple
+
+Se intentará ahora obtener mejores resultados estableciendo interacciones y no linealidad usando más de una variable en la regresión lineal. La estrategia a seguir será una selección hacia atrás, es decir, e empezará ajustando el modelo con todas las variables y se irán descartando las que presenten p-values muy altos. Esto se puede hacer ya que $p < n$, es decir, tenemos más datos que predictores.
+
+
+```{r}
+fit6 <- lm(price ~ ., data = house)
+summary(fit6)
+fit7 <- lm(price ~ ., data = house %>% dplyr::select(-H2p2))
+summary(fit7)
+fit8 <- lm(price ~ ., data = house %>% dplyr::select(-H2p2, -P6p2))
+summary(fit8)
+fit9 <- lm(price ~ ., data = house %>% dplyr::select(-H2p2, -P6p2, -H8p2))
+summary(fit9)
+house.mlm <- house %>% dplyr::select(-H2p2, -P6p2, -H8p2)
+```
+
+Usando todas las variables el $R^2$ mejora, sin embargo sigue siendo bajo. El F-Statistic es alto, lo cual indique que podemos rechazar la hipótesis nula y afirmar que al menos algunas variables están relacionadas con la variable a predecir. Los resultados del modelo ya son mejores que el modelo de regresión lineal simple anterior, ya que tiene menor error y más $R^2$, sin embargo se procede a intentar mejorar esta regresión múltiple eliminando la variable de mayor p-valor `H2p2`. De las dos variables muy correladas que existían, se elimina una de ellas, `P6p2`, y tras hacerlo aparece otra variable con un p-valor muy alto, `H8p2`, también se quita. Tras quitar esta variable ya son todos los p-valores bajos, nos quedaremos con el resto de variables como predictoras.
+
+```{r}
+names(house.mlm)
+fit10 <- lm(price ~ log(P1)*P15p1 + log(P1)*P15p3 + log(P1)*P16p2 + log(P1)*H18pA,
+            data = house.mlm %>%
+                dplyr::select(-H13p1, -P11p4, -P27p4, -H40p4,
+                              -P18p2, -H10p1, -P5p1, -P14p9))
+formula(fit10)
+summary(fit10)
+yprime <- predict(fit10, house.mlm)
+sqrt(sum(abs(house.mlm$price-yprime)^2)/length(yprime))
+```
+
+Para elegir las interacciones y no linealidad se han ido probando distintas formulas y quitando las variables con mayores p-valores. Ya que `P1` era la variable que mejores resultados dio en el apartado anterior, se ha mantenido aquí con su transformación logarítmica. Haciendo interacciones con el resto de variables seleccionadas se ha conseguido mejorar el modelo, ya que ahora el $R^2$ ha subido a 0.30. El RMSE final es 44407.
+
+## Regresión con KNN
+
+```{r}
+fitknn7 <-
+    kknn(price ~ log(P1)*P15p1 + log(P1)*P15p3 + log(P1)*P16p2 + log(P1)*H18pA,
+     house.mlm,
+     house.mlm,
+     k = 7,
+     distance = 2,
+     kernel = "optimal",
+     scale = T)
+yprime <- fitknn7$fitted.values
+sqrt(sum((house.mlm$price-yprime)^2)/length(yprime))
+```
+
+El modelo de knn mejora bastante el de regresión lineal, con un RMSE de 28740, cerca de la mitad del error en el modelo anterior. Esto puede estar debido claramente a la no linealidad de los datos en este conjunto de datos. Ya que KNN no asume linealidad.
+
+Se procede ahora a aplicar knn usando las particiones.
+
+```{r}
+nombre <- "./data/Datasets Regresion/house/house"
+
+run_lm_fold <- function(i, x, tt = "test") {
+    file <- paste(x, "-5-", i, "tra.dat", sep="")
+    x_tra <- read.csv(file, comment.char="@")
+    file <- paste(x, "-5-", i, "tst.dat", sep="")
+    x_tst <- read.csv(file, comment.char="@")
+    In <- length(names(x_tra)) - 1
+    names(x_tra)[1:In] <- paste ("X", 1:In, sep="")
+    names(x_tra)[In+1] <- "Y"
+    names(x_tst)[1:In] <- paste ("X", 1:In, sep="")
+    names(x_tst)[In+1] <- "Y"
+    if (tt == "train") {
+        test <- x_tra
+    }
+    else {
+        test <- x_tst
+    }
+    fitMulti=lm(Y~.,x_tra)
+    yprime=predict(fitMulti,test)
+    sum(abs(test$Y-yprime)^2)/length(yprime) ##MSE
+}
+
+run_knn_fold <- function(i, x, tt = "test") {
+    file <- paste(x, "-5-", i, "tra.dat", sep="")
+    x_tra <- read.csv(file, comment.char="@")
+    file <- paste(x, "-5-", i, "tst.dat", sep="")
+    x_tst <- read.csv(file, comment.char="@")
+    In <- length(names(x_tra)) - 1
+    names(x_tra)[1:In] <- paste ("X", 1:In, sep="")
+    names(x_tra)[In+1] <- "Y"
+    names(x_tst)[1:In] <- paste ("X", 1:In, sep="")
+    names(x_tst)[In+1] <- "Y"
+    if (tt == "train") {
+        test <- x_tra
+    }
+    else {
+        test <- x_tst
+    }
+    fitMulti=kknn(Y~.,x_tra,test)
+    yprime=fitMulti$fitted.values
+    sum(abs(test$Y-yprime)^2)/length(yprime) ##MSE
+}
+(lmMSEtrain<-mean(sapply(1:5,run_lm_fold,nombre,"train")))
+(lmMSEtest<-mean(sapply(1:5,run_lm_fold,nombre,"test")))
+(knnMSEtrain<-mean(sapply(1:5,run_knn_fold,nombre,"train")))
+(knnMSEtest<-mean(sapply(1:5,run_knn_fold,nombre,"test")))
+
+run_lm_fold_inter <- function(i, x, tt = "test") {
+    file <- paste(x, "-5-", i, "tra.dat", sep="")
+    x_tra <- read.csv(file, comment.char="@")
+    file <- paste(x, "-5-", i, "tst.dat", sep="")
+    x_tst <- read.csv(file, comment.char="@")
+    In <- length(names(x_tra)) - 1
+    colnames(x_tra) <- c("P1", "P5p1", "P6p2", "P11p4", "P14p9", "P15p1",
+                         "P15p3", "P16p2", "P18p2", "P27p4", "H2p2", "H8p2",
+                         "H10p1", "H13p1", "H18pA", "H40p4", "Y")
+    colnames(x_tst) <- c("P1", "P5p1", "P6p2", "P11p4", "P14p9", "P15p1",
+                         "P15p3", "P16p2", "P18p2", "P27p4", "H2p2", "H8p2",
+                         "H10p1", "H13p1", "H18pA", "H40p4", "Y")
+    if (tt == "train") {
+        test <- x_tra
+    }
+    else {
+        test <- x_tst
+    }
+    fitMulti=lm(Y ~ log(P1)*P15p1 + log(P1)*P15p3 + log(P1)*P16p2 + log(P1)*H18pA,x_tra)
+    yprime=predict(fitMulti,test)
+    sum(abs(test$Y-yprime)^2)/length(yprime) ##MSE
+}
+
+run_knn_fold_inter <- function(i, x, tt = "test") {
+    file <- paste(x, "-5-", i, "tra.dat", sep="")
+    x_tra <- read.csv(file, comment.char="@")
+    file <- paste(x, "-5-", i, "tst.dat", sep="")
+    x_tst <- read.csv(file, comment.char="@")
+    In <- length(names(x_tra)) - 1
+    colnames(x_tra) <- c("P1", "P5p1", "P6p2", "P11p4", "P14p9", "P15p1",
+                         "P15p3", "P16p2", "P18p2", "P27p4", "H2p2", "H8p2",
+                         "H10p1", "H13p1", "H18pA", "H40p4", "Y")
+    colnames(x_tst) <- c("P1", "P5p1", "P6p2", "P11p4", "P14p9", "P15p1",
+                         "P15p3", "P16p2", "P18p2", "P27p4", "H2p2", "H8p2",
+                         "H10p1", "H13p1", "H18pA", "H40p4", "Y")
+    if (tt == "train") {
+        test <- x_tra
+    }
+    else {
+        test <- x_tst
+    }
+    fitMulti=kknn(Y ~ log(P1)*P15p1 + log(P1)*P15p3 + log(P1)*P16p2 + log(P1)*H18pA,x_tra,test)
+    yprime=fitMulti$fitted.values
+    sum(abs(test$Y-yprime)^2)/length(yprime) ##MSE
+}
+
+(lmMSEtrain_inter<-mean(sapply(1:5,run_lm_fold_inter,nombre,"train")))
+(lmMSEtest_inter <-mean(sapply(1:5,run_lm_fold_inter,nombre,"test")))
+(knnMSEtrain_inter<-mean(sapply(1:5,run_knn_fold_inter,nombre,"train")))
+(knnMSEtest_inter<-mean(sapply(1:5,run_knn_fold_inter,nombre,"test")))
+```
+
+Para realizar la validación cruzada con 5 particiones, primero se aplican los modelos usando todas las variables y valores por defecto en los algoritmos. El error de test para regresión es lmMSEtest, mientras que para knn es knnMSEtest, bastante mayor, probablemente debido a la gran dimensionalidad del conjunto. Sin embargo, usando la el modelo aprendido en los apartados anteriores la regresión lineal obtiene mejores resultados, con un error para test de lmMSEtrain_inter, esto es debido a que este modelo ajusta mejor los datos debido a su mayor $R^2$, que explican mejor la variable a predecir. El modelo aprendido no funciona tan bien para KNN, siendo este mucho peor en este caso, con un knnMSEtest_inter de error.
+
+## Comparativa
+
+```{r}
+resultados <-  read.csv("./data/results/regr_test_alumnos.csv")
+tablatst <- cbind(resultados[,2:dim(resultados)[2]])
+colnames(tablatst) <- names(resultados)[2:dim(resultados)[2]]
+rownames(tablatst) <- resultados[,1]
+resultados <- read.csv("./data/results/regr_train_alumnos.csv")
+tablatra <- cbind(resultados[,2:dim(resultados)[2]])
+colnames(tablatra) <- names(resultados)[2:dim(resultados)[2]]
+rownames(tablatra) <- resultados[,1]
+
+tablatra[13,1] <- lmMSEtrain
+tablatra[13,2] <- knnMSEtrain
+tablatst[13,1] <- lmMSEtest
+tablatst[13,2] <- knnMSEtest
+
+difs <- (tablatst[,1] - tablatst[,2]) / tablatst[,1]
+wilc_1_2 <- cbind(ifelse (difs<0, abs(difs)+0.1, 0+0.1), ifelse (difs>0, abs(difs)+0.1, 0+0.1))
+colnames(wilc_1_2) <- c(colnames(tablatst)[1], colnames(tablatst)[2])
+head(wilc_1_2)
+
+LMvsKNNtst <- wilcox.test(wilc_1_2[,1], wilc_1_2[,2], alternative = "two.sided", paired=TRUE)
+Rmas <- LMvsKNNtst$statistic
+pvalue <- LMvsKNNtst$p.value
+LMvsKNNtst <- wilcox.test(wilc_1_2[,2], wilc_1_2[,1], alternative = "two.sided", paired=TRUE)
+Rmenos <- LMvsKNNtst$statistic
+Rmas
+pvalue
+
+test_friedman <- friedman.test(as.matrix(tablatst))
+test_friedman
+tam <- dim(tablatst)
+groups <- rep(1:tam[2], each=tam[1])
+pairwise.wilcox.test(as.matrix(tablatst), groups, p.adjust = "holm", paired = TRUE)
+```
+
+Para el test de wilcoxon el p-valor resultante es demasiado alto no podemos rechazar la hipótesis nula, como consecuencia no podemos asegurar que KNN sea mejor que LM o viceversa, ya que no podemos comparar las medianas de los resultados. No existen diferencias significativas entre ambos algoritmos. Para friedman, ya que el p-valor es significativo, debemos aplicar Holm, ya que existen diferencias significativas entre un par de algoritmos. La tabla muestra que existen diferencias significativas a favor de M5. Repetimos los test para los resultados en entrenamiento y ver si ha habido sobreentrenamiento.
+
+```{r}
+difs <- (tablatra[,1] - tablatra[,2]) / tablatra[,1]
+wilc_1_2 <- cbind(ifelse (difs<0, abs(difs)+0.1, 0+0.1), ifelse (difs>0, abs(difs)+0.1, 0+0.1))
+colnames(wilc_1_2) <- c(colnames(tablatra)[1], colnames(tablatra)[2])
+head(wilc_1_2)
+
+LMvsKNNtst <- wilcox.test(wilc_1_2[,1], wilc_1_2[,2], alternative = "two.sided", paired=TRUE)
+Rmas <- LMvsKNNtst$statistic
+pvalue <- LMvsKNNtst$p.value
+LMvsKNNtst <- wilcox.test(wilc_1_2[,2], wilc_1_2[,1], alternative = "two.sided", paired=TRUE)
+Rmenos <- LMvsKNNtst$statistic
+Rmas
+pvalue
+
+sapply(tablatra, median)
+
+test_friedman <- friedman.test(as.matrix(tablatra))
+test_friedman
+tam <- dim(tablatra)
+groups <- rep(1:tam[2], each=tam[1])
+pairwise.wilcox.test(as.matrix(tablatra), groups, p.adjust = "holm", paired = TRUE)
+```
+
+El test de wilcoxon es positivo, luego se puede comparar la mediana de los valores para observar qué modelo es mejor, en este caso es KNN. Aunque si en test no se podía corroborar la existencia de diferencias significativas, quizá en entrenamiento haya habido sobreajuste.
+
+# Bibliografía
+
+- https://robjhyndman.com/hyndsight/transformations/
+- https://stackoverflow.com/questions/33612312/how-to-reverse-inverse-hyperbolic-sine-transformation-in-r
+- http://stattrek.com/regression/linear-transformation.aspx?tutorial=ap
+- https://onlinecourses.science.psu.edu/stat501/node/319
+
+# Apéndice
+
+A continuación el código completo:
+
+```{r eval=F}
+## ----echo=F, include=F---------------------------------------------------
+knitr::opts_chunk$set(comment = NA,
+                      message = F,
+                      warning = F)
+
+require(Hmisc)
+require(dplyr)
+require(ggplot2)
+require(moments)
+require(gridExtra)
+require(grid)
+require(dplyr)
+require(GGally)
+require(reshape2)
+require(caret)
+require(DMwR)
+require(kknn)
+
+ggplot2::theme_set(theme_minimal())
+
+## ------------------------------------------------------------------------
+haberman <- read.csv("./data/Datasets Clasificacion/haberman/haberman.dat", comment.char = "@")
+colnames(haberman) <- c("Age", "YearOfOperation", "nodes", "survival")
+str(haberman)
+dim(haberman)
+sum(is.na(haberman))
+
+## ------------------------------------------------------------------------
+summary(haberman)
+length(which(haberman$nodes == 0))
+
+## ------------------------------------------------------------------------
+sapply(haberman[, -4], sd)
+sapply(haberman[, -4], var)
+sapply(haberman, IQR)
+sapply(haberman[, -4], skewness)
+sapply(haberman[, -4], kurtosis)
+
+## ------------------------------------------------------------------------
+h1 <- ggplot2::ggplot(haberman, aes(x = Age)) + geom_histogram(binwidth = 5)
+h2 <- ggplot2::ggplot(haberman, aes(x = YearOfOperation)) + geom_histogram(binwidth = 3)
+h3 <- ggplot2::ggplot(haberman, aes(x = nodes)) + geom_histogram()
+gridExtra::grid.arrange(h1, h2, h3, nrow = 2, top = textGrob("Histogramas de Haberman", gp=gpar(fontsize=20)))
+
+## ------------------------------------------------------------------------
+bp1 <- ggplot2::ggplot(haberman, aes(1, Age)) + geom_boxplot()
+bp2 <- ggplot2::ggplot(haberman, aes(1, YearOfOperation)) + geom_boxplot()
+bp3 <- ggplot2::ggplot(haberman, aes(1, nodes)) + geom_boxplot()
+bar <- ggplot2::ggplot(haberman, aes(survival)) + geom_bar()
+gridExtra::grid.arrange(bp1, bp2, bp3, bar, nrow = 2)
+
+## ------------------------------------------------------------------------
+GGally::ggpairs(haberman)
+
+## ------------------------------------------------------------------------
+haberman.m <- melt(haberman, id.vars = "survival")
+p <- ggplot2::ggplot(data = haberman.m, aes(x=variable, y=value))
+p <- p + geom_boxplot(aes(fill=survival))
+p <- p + facet_wrap(~ variable, scales="free")
+p <- p + ggtitle("Survival vs resto")
+p <- p + guides(fill=guide_legend(title="Survival"))
+p
+
+## ----message=F, warning=F------------------------------------------------
+house <- read.csv("./data/Datasets Regresion/house/house.dat",
+                  comment.char = "@")
+colnames(house) <- c("P1", "P5p1", "P6p2", "P11p4", "P14p9", "P15p1", "P15p3",
+                     "P16p2", "P18p2", "P27p4", "H2p2", "H8p2", "H10p1",
+                     "H13p1", "H18pA", "H40p4",  "price")
+str(house)
+dim(house)
+sum(is.na(house))
+
+## ----message=F, warning=F------------------------------------------------
+summary(house)
+head(table(house$P6p2))
+a <- table((house$P11p4))
+a[a > 50]
+ggplot2::ggplot(house, aes(x = P15p3)) + geom_histogram()
+head(table(house$P15p3))
+head(table(house$P18p2))
+describe(house$P18p2)
+ggplot2::ggplot(house, aes(x = price)) + geom_histogram()
+
+## ----message=F, warning=F------------------------------------------------
+summary(house)
+sapply(house, sd)
+sapply(house, IQR)
+sapply(house, skewness)
+sapply(house, kurtosis)
+
+## ----message=F, warning=F------------------------------------------------
+house %>%
+    dplyr::select(-P1, -price) %>%
+    melt %>%
+    ggplot2::ggplot(aes(x = variable, y = value)) + geom_boxplot()
+house %>%
+    dplyr::select(P1, price) %>%
+    melt %>%
+    ggplot2::ggplot(aes(x = variable, y = value)) + geom_boxplot()
+
+## ----message=F, warning=F------------------------------------------------
+#GGally::ggpairs(house)
+
+ihs <- function(x) {
+    y <- log(x + sqrt(x ^ 2 + 1))
+    return(y)
+}
+gridExtra::grid.arrange(ggplot2::ggplot(house, aes(P1, P5p1)) + geom_point(),
+                        ggplot2::ggplot(house, aes(I(log1p(P1)), P5p1)) + geom_point(),
+                        ggplot2::ggplot(house, aes(log1p(P1), P5p1)) + geom_point())
+
+## ----message=F, warning=F------------------------------------------------
+temp <- house
+plotY <- function (x,y) {
+    plot(temp[,y]~temp[,x], xlab=paste(names(temp)[x]," X",x,sep=""),
+         ylab=names(temp)[y])
+}
+par(mfrow=c(4,4))
+x <- sapply(1:(dim(temp)[2]-1), plotY, dim(temp)[2])
+par(mfrow=c(1,1))
+
+## ----message=F, warning=F------------------------------------------------
+plot(log(house$price) ~ log(house$P1))
+
+## ----message=F, warning=F------------------------------------------------
+#apply(house, 2, function(x.col) summary(lm(price ~ x.col, data = house)))
+
+
+
+
+
+ihs <- function(x) {
+    y <- log(x + sqrt(x ^ 2 + 1))
+    return(y)
+}
+
+## ------------------------------------------------------------------------
+showModel <- function(y, x, model, trans = identity) {
+    plot(x, y, pch = 19)
+
+    abline(a = model$coefficients[[1]],
+           b = trans(model$coefficients[[2]]),
+           lwd = 2,
+           col = "red")
+
+    par(mfrow = c(2,2))
+    plot(model, pch = 19)
+    par(mfrow = c(1,1))
+}
+
+fit1 <- lm(price ~ log(P1), data = house)
+summary(fit1)
+showModel(house$price, house$P1, fit1, log)
+
+## ------------------------------------------------------------------------
+fit2 <- lm(price ~ H8p2, data = house)
+summary(fit2)
+showModel(house$price, house$H8p2, fit2)
+plot(house$H8p2, house$price)
+
+## ------------------------------------------------------------------------
+fit3 <- lm(price ~ P5p1, data = house)
+summary(fit3)
+showModel(house$price, house$P5p1, fit3)
+plot(house$H8p2, house$price)
+
+## ------------------------------------------------------------------------
+fit4 <- lm(price ~ P18p2, data = house)
+summary(fit4)
+showModel(house$price, house$P18p2, fit4)
+plot(house$P18p2, house$price)
+
+## ------------------------------------------------------------------------
+fit5 <- lm(price ~ H10p1, data = house)
+summary(fit5)
+showModel(house$price, house$P18p2, fit5)
+plot(house$P18p2, house$price)
+
+## ------------------------------------------------------------------------
+fit6 <- lm(price ~ ., data = house)
+summary(fit6)
+fit7 <- lm(price ~ ., data = house %>% dplyr::select(-H2p2))
+summary(fit7)
+fit8 <- lm(price ~ ., data = house %>% dplyr::select(-H2p2, -P6p2))
+summary(fit8)
+fit9 <- lm(price ~ ., data = house %>% dplyr::select(-H2p2, -P6p2, -H8p2))
+summary(fit9)
+house.mlm <- house %>% dplyr::select(-H2p2, -P6p2, -H8p2)
+
+## ------------------------------------------------------------------------
+names(house.mlm)
+fit10 <- lm(price ~ log(P1)*P15p1 + log(P1)*P15p3 + log(P1)*P16p2 + log(P1)*H18pA, data = house.mlm %>%
+                                             dplyr::select(-H13p1, -P11p4, -P27p4, -H40p4,
+                                                           -P18p2, -H10p1, -P5p1, -P14p9))
+formula(fit10)
+summary(fit10)
+yprime <- predict(fit10, house.mlm)
+sqrt(sum(abs(house.mlm$price-yprime)^2)/length(yprime))
+
+## ------------------------------------------------------------------------
+fitknn7 <- kknn(formula = price ~ log(P1)*P15p1 + log(P1)*P15p3 + log(P1)*P16p2 + log(P1)*H18pA,
+     house.mlm,
+     house.mlm,
+     k = 7,
+     distance = 2,
+     kernel = "optimal",
+     scale = T)
+yprime <- fitknn7$fitted.values
+sqrt(sum((house.mlm$price-yprime)^2)/length(yprime))
+
+## ------------------------------------------------------------------------
+nombre <- "./data/Datasets Regresion/house/house"
+
+run_lm_fold <- function(i, x, tt = "test") {
+    file <- paste(x, "-5-", i, "tra.dat", sep="")
+    x_tra <- read.csv(file, comment.char="@")
+    file <- paste(x, "-5-", i, "tst.dat", sep="")
+    x_tst <- read.csv(file, comment.char="@")
+    In <- length(names(x_tra)) - 1
+    names(x_tra)[1:In] <- paste ("X", 1:In, sep="")
+    names(x_tra)[In+1] <- "Y"
+    names(x_tst)[1:In] <- paste ("X", 1:In, sep="")
+    names(x_tst)[In+1] <- "Y"
+    if (tt == "train") {
+        test <- x_tra
+    }
+    else {
+        test <- x_tst
+    }
+    fitMulti=lm(Y~.,x_tra)
+    yprime=predict(fitMulti,test)
+    sum(abs(test$Y-yprime)^2)/length(yprime) ##MSE
+}
+
+run_knn_fold <- function(i, x, tt = "test") {
+    file <- paste(x, "-5-", i, "tra.dat", sep="")
+    x_tra <- read.csv(file, comment.char="@")
+    file <- paste(x, "-5-", i, "tst.dat", sep="")
+    x_tst <- read.csv(file, comment.char="@")
+    In <- length(names(x_tra)) - 1
+    names(x_tra)[1:In] <- paste ("X", 1:In, sep="")
+    names(x_tra)[In+1] <- "Y"
+    names(x_tst)[1:In] <- paste ("X", 1:In, sep="")
+    names(x_tst)[In+1] <- "Y"
+    if (tt == "train") {
+        test <- x_tra
+    }
+    else {
+        test <- x_tst
+    }
+    fitMulti=kknn(Y~.,x_tra,test)
+    yprime=fitMulti$fitted.values
+    sum(abs(test$Y-yprime)^2)/length(yprime) ##MSE
+}
+(lmMSEtrain<-mean(sapply(1:5,run_lm_fold,nombre,"train")))
+(lmMSEtest<-mean(sapply(1:5,run_lm_fold,nombre,"test")))
+(knnMSEtrain<-mean(sapply(1:5,run_knn_fold,nombre,"train")))
+(knnMSEtest<-mean(sapply(1:5,run_knn_fold,nombre,"test")))
+
+
+run_lm_fold_inter <- function(i, x, tt = "test") {
+    file <- paste(x, "-5-", i, "tra.dat", sep="")
+    x_tra <- read.csv(file, comment.char="@")
+    file <- paste(x, "-5-", i, "tst.dat", sep="")
+    x_tst <- read.csv(file, comment.char="@")
+    In <- length(names(x_tra)) - 1
+    colnames(x_tra) <- c("P1", "P5p1", "P6p2", "P11p4", "P14p9", "P15p1", "P15p3", "P16p2", "P18p2", "P27p4", "H2p2", "H8p2", "H10p1", "H13p1", "H18pA", "H40p4", "Y")
+    colnames(x_tst) <- c("P1", "P5p1", "P6p2", "P11p4", "P14p9", "P15p1", "P15p3", "P16p2", "P18p2", "P27p4", "H2p2", "H8p2", "H10p1", "H13p1", "H18pA", "H40p4", "Y")
+    if (tt == "train") {
+        test <- x_tra
+    }
+    else {
+        test <- x_tst
+    }
+    fitMulti=lm(Y ~ log(P1)*P15p1 + log(P1)*P15p3 + log(P1)*P16p2 + log(P1)*H18pA,x_tra)
+    yprime=predict(fitMulti,test)
+    sum(abs(test$Y-yprime)^2)/length(yprime) ##MSE
+}
+
+run_knn_fold_inter <- function(i, x, tt = "test") {
+    file <- paste(x, "-5-", i, "tra.dat", sep="")
+    x_tra <- read.csv(file, comment.char="@")
+    file <- paste(x, "-5-", i, "tst.dat", sep="")
+    x_tst <- read.csv(file, comment.char="@")
+    In <- length(names(x_tra)) - 1
+    colnames(x_tra) <- c("P1", "P5p1", "P6p2", "P11p4", "P14p9", "P15p1", "P15p3", "P16p2", "P18p2", "P27p4", "H2p2", "H8p2", "H10p1", "H13p1", "H18pA", "H40p4", "Y")
+    colnames(x_tst) <- c("P1", "P5p1", "P6p2", "P11p4", "P14p9", "P15p1", "P15p3", "P16p2", "P18p2", "P27p4", "H2p2", "H8p2", "H10p1", "H13p1", "H18pA", "H40p4", "Y")
+    if (tt == "train") {
+        test <- x_tra
+    }
+    else {
+        test <- x_tst
+    }
+    fitMulti=kknn(Y ~ log(P1)*P15p1 + log(P1)*P15p3 + log(P1)*P16p2 + log(P1)*H18pA,x_tra,test)
+    yprime=fitMulti$fitted.values
+    sum(abs(test$Y-yprime)^2)/length(yprime) ##MSE
+}
+
+(lmMSEtrain_inter<-mean(sapply(1:5,run_lm_fold_inter,nombre,"train")))
+(lmMSEtest_inter <-mean(sapply(1:5,run_lm_fold_inter,nombre,"test")))
+(knnMSEtrain_inter<-mean(sapply(1:5,run_knn_fold_inter,nombre,"train")))
+(knnMSEtest_inter<-mean(sapply(1:5,run_knn_fold_inter,nombre,"test")))
+
+## ------------------------------------------------------------------------
+resultados <-  read.csv("./data/results/regr_test_alumnos.csv")
+tablatst <- cbind(resultados[,2:dim(resultados)[2]])
+colnames(tablatst) <- names(resultados)[2:dim(resultados)[2]]
+rownames(tablatst) <- resultados[,1]
+resultados <- read.csv("./data/results/regr_train_alumnos.csv")
+tablatra <- cbind(resultados[,2:dim(resultados)[2]])
+colnames(tablatra) <- names(resultados)[2:dim(resultados)[2]]
+rownames(tablatra) <- resultados[,1]
+
+tablatra[13,1] <- lmMSEtrain
+tablatra[13,2] <- knnMSEtrain
+tablatst[13,1] <- lmMSEtest
+tablatst[13,2] <- knnMSEtest
+
+difs <- (tablatst[,1] - tablatst[,2]) / tablatst[,1]
+wilc_1_2 <- cbind(ifelse (difs<0, abs(difs)+0.1, 0+0.1), ifelse (difs>0, abs(difs)+0.1, 0+0.1))
+colnames(wilc_1_2) <- c(colnames(tablatst)[1], colnames(tablatst)[2])
+head(wilc_1_2)
+
+LMvsKNNtst <- wilcox.test(wilc_1_2[,1], wilc_1_2[,2], alternative = "two.sided", paired=TRUE)
+Rmas <- LMvsKNNtst$statistic
+pvalue <- LMvsKNNtst$p.value
+LMvsKNNtst <- wilcox.test(wilc_1_2[,2], wilc_1_2[,1], alternative = "two.sided", paired=TRUE)
+Rmenos <- LMvsKNNtst$statistic
+Rmas
+pvalue
+
+test_friedman <- friedman.test(as.matrix(tablatst))
+test_friedman
+tam <- dim(tablatst)
+groups <- rep(1:tam[2], each=tam[1])
+pairwise.wilcox.test(as.matrix(tablatst), groups, p.adjust = "holm", paired = TRUE)
+
+## ------------------------------------------------------------------------
+difs <- (tablatra[,1] - tablatra[,2]) / tablatra[,1]
+wilc_1_2 <- cbind(ifelse (difs<0, abs(difs)+0.1, 0+0.1), ifelse (difs>0, abs(difs)+0.1, 0+0.1))
+colnames(wilc_1_2) <- c(colnames(tablatra)[1], colnames(tablatra)[2])
+head(wilc_1_2)
+
+LMvsKNNtst <- wilcox.test(wilc_1_2[,1], wilc_1_2[,2], alternative = "two.sided", paired=TRUE)
+Rmas <- LMvsKNNtst$statistic
+pvalue <- LMvsKNNtst$p.value
+LMvsKNNtst <- wilcox.test(wilc_1_2[,2], wilc_1_2[,1], alternative = "two.sided", paired=TRUE)
+Rmenos <- LMvsKNNtst$statistic
+Rmas
+pvalue
+
+sapply(tablatra, median)
+
+test_friedman <- friedman.test(as.matrix(tablatra))
+test_friedman
+tam <- dim(tablatra)
+groups <- rep(1:tam[2], each=tam[1])
+pairwise.wilcox.test(as.matrix(tablatra), groups, p.adjust = "holm", paired = TRUE)
+
+## ------------------------------------------------------------------------
+set.seed(3456)
+haberTrainIndex <- createDataPartition(haberman$survival, p = .9,
+                                  list = F,
+                                  times = 1)
+habermanTrain <- haberman[haberTrainIndex, ]
+habermanTest <- haberman[-haberTrainIndex, ]
+table(habermanTrain$survival)
+
+habermanTrain <- habermanTrain %>% dplyr::select(-YearOfOperation)
+habermanTest <- habermanTest %>% dplyr::select(-YearOfOperation)
+
+habermanTrainDownSampled <- downSample(x = habermanTrain[, -ncol(habermanTrain)],
+                                       y = habermanTrain$survival,
+                                       yname = "survival")
+
+
+
+habermanTrainDownSampled <- SMOTE(survival ~ .,
+                                  habermanTrain)
+table(habermanTrainDownSampled$survival)
+
+
+fitControl <- trainControl(method = "repeatedcv",
+                           number = 10,
+                           repeats = 10)
+knnGrid <- expand.grid(k = 2:15)
+# For example, in problems where there are a low percentage of samples
+# in one class, using metric = "Kappa" can improve quality of the final model.
+knnModel <- train(survival ~ .,
+                  data = habermanTrainDownSampled,
+                  method = "knn",
+                  preProcess = c("center", "scale"),
+                  trControl = fitControl,
+                  tuneGrid = knnGrid,
+                  metric = "Kappa")
+knnModel
+knnPredict <- predict(knnModel, habermanTest)
+(knnacc <- postResample(pred = knnPredict,
+             obs = habermanTest$survival))
+
+## ----message=F, warning=F------------------------------------------------
+set.seed(3456)
+
+ldaModel <- train(survival ~ .,
+                  data = habermanTrain,
+                  method = "lda",
+                  preProcess = c("center", "scale"),
+                  trControl = fitControl,
+                  metric = "Kappa")
+ldaModel
+ldaPredict <- predict(ldaModel, habermanTest)
+(ldaAcc <- postResample(pred = ldaPredict,
+             obs = habermanTest$survival))
+
+## ----message=F, warning=F------------------------------------------------
+set.seed(3456)
+
+qdaModel <- train(survival ~ .,
+                  data = habermanTrain,
+                  method = "qda",
+                  preProcess = c("center", "scale"),
+                  trControl = fitControl,
+                  metric = "Kappa")
+qdaModel
+ldaPredict <- predict(qdaModel, habermanTest)
+(qdaAcc <- postResample(pred = ldaPredict,
+             obs = habermanTest$survival))
+
+## ----message=F, warning=F------------------------------------------------
+resultados <- read.csv("./data/results/clasif_test_alumos.csv")
+tablatst <- cbind(resultados[,2:dim(resultados)[2]])
+colnames(tablatst) <- names(resultados)[2:dim(resultados)[2]]
+rownames(tablatst) <- resultados[,1]
+tablatst[6, ] <- c(knnacc[[1]], ldaAcc[[1]], qdaAcc[[1]])
+friedman <- friedman.test(as.matrix(tablatst))
+friedman
+```
