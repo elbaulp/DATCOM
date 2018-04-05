@@ -405,22 +405,3 @@ IntroductionIntroduction toto Data Data MiningMining
 AddisonAddison-WesleyWesley, 2006. , 2006.
 ISBN 0321321367ISBN 0321321367ISBN 0321321367 ISBN 0321321367
 [capítulos 8 [capítulos 8 -disponible en la webdisponible en la web- y 9]y 9]
-
-
-<figure>
-        <a href="/img/j">
-          <amp-img
-            on="tap:lightbox1"
-            role="button"
-            tabindex="0"
-            layout="responsive"
-            src="/img/j"
-            alt="j"
-            title="j"
-            sizes="(min-width: 900px) 900px, 100vw"
-            width="900"
-            height="788">
-          </amp-img>
-        </a>
-        <figcaption>j</figcaption>
-</figure>
