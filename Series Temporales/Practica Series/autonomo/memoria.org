@@ -1,0 +1,181 @@
+#+TITLE: Trabajo autónomo I Series Temporales
+#+AUTHOR: Alejandro Alcalde \\ algui91@ugr.es \\ Series Temporales
+#+LANGUAGE: es
+#+LATEX_COMPILER: xelatex
+#+STARTUP: inlineimages
+#+STARTUP: latexpreview
+#+OPTIONS: H:6
+
+
+* Serie Diaria
+Se ha escogido la estación C619I, debido a que era la que disponía de más datos.
+** Preprocesamiento
+Se han escogido los datos desde enero de 2018 hasta Febrero de 2018. La frecuencia elegida para la serie temporal ha sido semanal (7).
+
+Para imputar los valores perdidos se ha usado el paquete ImputeTs.
+
+Para dividir en train y test se ha reservado la última semana de Febrero y el resto para train.
+
+** Análisis Inicial
+Al primer vistazo visual (Figura \ref{fig:inicial}) de la serie se observa que no hay tendencia alguna, pero sí que algo de estacionalidad que habrá que modelar. Al analizar la serie descompuesta en la Figura \ref{fig2:decompose} se afirma que no existe tendencia, la varianza en el ruido parece ser correcta, por lo que no se ha tomado la decisión de transformar los datos. Sí que existe un patrón estacional.
+
+#+CAPTION: La serie temporal
+#+NAME: fig:inicial
+#+ATTR_LATEX: :placement [H]
+[[file:img2/inicial.png]]
+
+#+CAPTION: La serie temporal descompuesta
+#+NAME: fig2:decompose
+#+ATTR_LATEX: :placement [H]
+[[file:img2/decompose.png]]
+
+** Análisis de Tendencia
+Como se ha comentado en la sección anterior, no hay tendencia.
+** Análisis de Estacionalidad
+Para modelar la estacionalidad se supone una estacionalidad de valor 7 y se resta la componente estacional a la serie en train. Hecho esto, se realiza un test adf que falla, luego se puede asumir que la serie no es estacionaria y es necesario diferenciarla, basta con aplicar la diferenciación una vez para convertirla a estacionaria. Otra forma de ver que no es estacionaria es observando el ACF (Figura \ref{fig2:ggacf}), si no cae de forma rápida, no es estacionaria y hay que diferenciar. Para reafirmar que la serie resultante es estacionaria se aplicó un test Box de tipo Ljung-Box que resultó positivo así como un acf.test sobre la serie sin estacionalidad.
+
+#+CAPTION: ACF de la serie sin estacionalidad
+#+NAME: fig2:ggacf
+#+ATTR_LATEX: :placement [H]
+[[file:img2/ggAcf.png]]
+
+** Estacionariedad
+Una vez se tiene la serie sin estacionalidad y siendo estacionaria, se observan los ACF y PACF de la figura \ref{fig2:ggtdisplay} y se selecciona un modelo.
+#+CAPTION: Serie estacionaria
+#+NAME: fig2:ggtdisplay
+#+ATTR_LATEX: :placement [H]
+[[file:img2/gttdisplay.png]]
+** Modelo
+Observando los resultados de ACF y PACF se decide modelar un Arima de orden 1,1,0, pero se probaron varios, el criterio a seguir para la elección del modelo es la medida AICc (/Akaike information criterion Corrected/), ya que se disponen de pocos datos. Estos fueron los modelos probados:
+
+- Arima(2,1,0) -> AICc 208
+- Arima(0,1,0) -> AICc 216
+- Arima(1,1,0) -> AICc 207
+- Arima(1,1,1) -> AICc 207
+
+Tras aplicar el modelo, el test Ljung-Box indica que los residuos son ruido blanco, ya que el p valor es bastante superior a .05, además los residuos son normales (Como muestra la figura \ref{fig2:residuals}).
+
+#+CAPTION: Residuos del modelo
+#+NAME: fig2:residuals
+#+ATTR_LATEX: :placement [H]
+[[file:img2/residuals.png]]
+
+** Validación del modelo
+La validación del modelo se ha hecho mediante los resultados de error en test (33.68) y la comprobación de los residuos mostrados más arriba, junto con el test de Ljunj.
+** Criterios para elección del modelo
+Para la elección del modelo se ha seguido el criterio de la medida AICc (/Akaike information criterion Corrected/), ya que se disponen de pocos datos.
+** Predicción
+Una vez validado el modelo, se procede a predecir las temperaturas para la primera semana de Marzo, las cuales son:
+
+- 1/03: 20.95735
+- 2/03: 20.89698
+- 3/03: 21.30805
+- 4/03: 21.52446
+- 5/03: 20.69483
+- 6/03: 20.77381
+- 7/03: 21.71122
+
+En la figura \ref{fig2:pred} se muestran las predicciones.
+
+#+CAPTION: Predicciones a 7 días vista
+#+NAME: fig2:pred
+#+ATTR_LATEX: :placement [H]
+[[file:img2/pred.png]]
+
+* Serie Mensual
+Para analizar la temperatura a nivel mensual se ha escogido la estación 1111X, una estación de Cantabria.
+** Preprocesamiento
+Los datos se han preprocesado imputando los valores perdidos usando un filtro de /kalman/, en concreto la llamada =imputeTS::na.kalman(serie)=.
+
+Para agregar los datos de la serie se ha usado el paquete =xts= y la función =apply.monthly= del mismo. La función usada para agregar los datos ha sido la mediana:
+
+#+BEGIN_SRC R
+  apply.monthly(serie.xts,
+                FUN = median)
+#+END_SRC
+
+Como los datos comienzan desde Marzo de 2013, se ha decidido considerar únicamente años completos, por tanto, la serie usada se compone de datos de Enero de 2014 hasta Febrero de 2018. Posteriormente se han dividido los datos en /train/ y /test/ con la siguiente distribución:
+
+- /Train/: Desde Enero de 2014 hasta Diciembre de 2017.
+- /Test/: Enero y Febrero de 2018
+** Análisis Inicial
+La primera impresión al ver la serie de la figura \ref{fig:serie} es que tiene un fuerte estacionalidad que habrá que eliminar, no se considera necesario realizarle ninguna transformación y no se detecta tendencia. Puede ser útil observar las serie descompuesta en la figura \ref{fig:decompose}, la cual muestra claramente la estacionalidad, y no se intuye tendencia.
+#+CAPTION: La serie temporal
+#+NAME: fig:serie
+#+ATTR_LATEX: :placement [H]
+[[file:img/serie.month.png]]
+#+CAPTION: La serie descompuesta
+#+NAME: fig:decompose
+#+ATTR_LATEX: :placement [H]
+[[file:img/serie.month.decompose.png]]
+** Análisis de Tendencia
+Como conclusión en el apartado anterior, no existe tendencia, luego no se modelará
+** Análisis de Estacionalidad
+Observando la salida del ACF en la figura \ref{fig:ggacf.train} se puede concluir que existe una clara estacionalidad, además en la descomposición de la serie también se apreciaba. Como refuerzo a esta teoria, la figura \ref{fig:ggsubseriesplot} muestra un claro patrón estacional.
+#+CAPTION: ACF
+#+NAME: fig:ggacf.train
+#+ATTR_LATEX: :placement [H]
+[[file:img/ggAcf.train.png]]
+
+#+CAPTION: GGsubseries
+#+NAME: fig:ggsubseriesplot
+#+ATTR_LATEX: :placement [H]
+[[file:img/ggsubseriesplot.png]]
+** Estacionariedad
+Debido a que existe una componente estacional, hay que restarsela a la serie, para así conseguir hacerla estacionaria. Tras eliminar esta componente, la serie queda como muestra la figura \ref{fig:no-estacionalidad}.
+#+CAPTION: Eliminando estacionalidad
+#+NAME: fig:no-estacionalidad
+#+ATTR_LATEX: :placement [H]
+[[file:img/no-estacionalidad.png]]
+
+Para comprobar que se ha eliminado la estacionalidad, se ejecuta un test adf, que confirma que ya no hay estacionalidad, y por tanto la serie ya es estacionaria.
+** Modelo
+Para la elección del modelo se usan los gráficos ACF y PACF de la figura \ref{fig:acfpacf} y se han probado varios modelos Arima en función de estos datos.
+#+CAPTION: PACF ACF
+#+NAME: fig:acfpacf
+#+ATTR_LATEX: :placement [H]
+[[file:img/acfpacf.png]]
+
+Según esto, se han probado los siguientes modelos:
+
+#+BEGIN_SRC R
+Arima(train.no.seasson, order = c(0,0,1)))
+Arima(train.no.seasson, order = c(1,0,1)))
+Arima(train.no.seasson, order = c(1,0,11)))
+Arima(train.no.seasson, order = c(1,0,15)))
+Arima(train.no.seasson, order = c(0,0,11)))
+Arima(train.no.seasson, order = c(0,0,15)))
+#+END_SRC
+
+y se ha escogido el de menor AICc, que resultó ser el de orden 0,0,1, con un valor de 151. Si se comprueban los residuos en la figura \ref{fig:residuos.ong} de este modelo, se observa que estos se comportan como ruido blanco y el test de Ljunj indica que estamos ante ruido blanco. Además, los residuos siguen una normal.
+
+#+CAPTION: Residuos del modelo Arima(0,0,1)
+#+NAME: fig:residuos.ong
+#+ATTR_LATEX: :placement [H]
+[[file:img/residuos.png]]
+
+El modelo tiene un error en test de 9.11. La figura \ref{fig:predict.png}  muestra una predicción a dos meses, y la figura \ref{fig:adjusted} muestra los valores ajustados junto con la predicción y los datos de test.
+
+#+CAPTION: Predicción a dos meses
+#+NAME: fig:predict.png
+#+ATTR_LATEX: :placement [H]
+[[file:img/predict.png]]
+
+#+CAPTION: Valores Ajustados
+#+NAME: fig:adjusted
+#+ATTR_LATEX: :placement [H]
+[[file:img/adjusted.png]]
+
+** Validación del modelo
+Como se explicó en la sección \ref{sec-1-6}, el modelo se ha validado mediante la observación de los residuos y el test de Ljunj.
+** Criterios para elección del modelo
+Para la elección del modelo se ha seguido el criterio de la medida AICc (/Akaike information criterion Corrected/), ya que se disponen de pocos datos.
+** Predicción
+Para la predicción final, se usa la serie completa, sin dividir en train y test, se quita la estacionalidad y se usa toda la serie para entrenar el modelo elegido. El resultado se puede observar en la figura \ref{fig:final1}.
+
+#+CAPTION: Predicción de Marzo y Abril
+#+NAME: fig:final1
+#+ATTR_LATEX: :placement [H]
+[[file:img/pred.png]]
+
+Los valores predichos para Marzo y Abril son 12.24596 y  14.94127, respectivamente.

@@ -1,0 +1,79 @@
+#+TITLE: Trabajo autónomo I Series Temporales
+#+SUBTITLE: Series Temporales
+#+AUTHOR: Alejandro Alcalde \\ algui91@ugr.es
+#+LANGUAGE: es
+#+STARTUP: inlineimages
+#+STARTUP: latexpreview
+#+OPTIONS: H:6
+
+* Preprocesamiento
+Para ambas series se ha decidido imputar los valores perdidos mediante el paquete =ImputeTS=, en concreto, se ha usado una imputación mediante medias móviles ponderadas. Este tipo de imputación reemplaza los valores perdidos usando un tamaño de ventana semi adaptativa para asegurar que todos los valores perdidos son imputados.
+
+* Análisis de tendencia y de estacionalidad
+En ninguna de las dos series se detectó tendencia. Para comprobarlo se hizo una inspección visual de los datos, así como la descomposición de la serie en sus componentes (Estacionalidad, Tendencia y Ruido). La descomposición de una serie consiste en separar de la serie la componente estacional y tendencia, existen dos tipos de descomposición, aditiva y multiplicativa. En este caso en ambas series se ha asumido una descomposición aditiva.
+
+Una descomposición aditiva consiste en dada una serie $y_t$, decomponerla en $S_t + T_t + R_t$, es decir
+
+\[
+y_t = S_t + T_t + R_t
+\]
+
+Donde $S_t$ es la componente estacional, $T_t$ la tendencia y $R_t$ el resto de la serie.
+
+En una descomposición clásica, como la usada en este trabajo, la serie se descompone del siguiente modo:
+
+Si se supone una estacionalidad de periodo $m$ (Por ejemplo $m = 12$), la descomposición clásica asume que la componente estacional es constante de año a año. Se calcula como sigue:
+
+1. Si $m$ es par, se calcula la componente $\hat{T}_t$ usando medias móviles $2 \times m$-MA. Si $m$ es impar, $\hat{T}_t$ se calcula usando medias móviles $m$-MA
+2. Calcular la serie sin tendencia: $y_t - \hat{T}_t$
+3. Para calcular $S_t$ simplemente se hacen las medias de la serie sin tendencia para dicha estación. En el caso de la serie mensual, para extraer la estacionalidad del més de Febrero, se calcula la media de todos los meses de Febrero en los datos, usando la serie sin tendencia del paso 2. Una vez se tienen todos los componentes estacionales, se ajustan para asegurar que suman cero. $\hat{S}_t$ se obtiene restando los valores medios de cada mes a cada año en los datos.
+4. La componente restante $\hat{R}_t$ se calcula con $\hat{R}_t = y_t - \hat{T}_t - \hat{S}_t$
+
+Con la serie descompuesta, se procede a analizar si hay o no estacionalidad. Se puede comprobar visualmente, como se ha explicado en la memoria de prácticas, en este caso ambas series tienen componente estacional. De forma teórica se puede comprobar mediante tests estadísticos. En concreto se ha usado el test de /Dickey-Fuller/, al aplicarlo sobre la serie se obtiene un p-valor > 0.05, por tanto se puede concluir que la serie no es estacionaria. Esto puede deberse a la influencia de la componente estacional. Cuando se elimina esta componente siguiendo el paso 3, el test es correcto y se puede asumir que ahora se dispone de una serie estacionaria.
+
+* Estacionareidad
+Las series estacionarias son aquellas cuyas propiedades no dependen del tiempo. Por tanto las series con tendencias o estacionalidad no son estacionarias. Por contra, el ruido blanco es estacionario. Para detectar si una serie es estacionaria, su gráfico no debería mostrar patrones predecibles.
+
+Los pasos y técnicas seguidas para hacer la serie estacionaria están descritos en la sección \ref{sec-2}. Además de estos, para la serie temporal diaria se ha diferenciado una vez.
+
+La diferenciación es una técnica usada para hacer a una serie estacionaria. Para ello se calculan las diferencias entre cada observación consecutiva, de esta forma se consigue suavizar o eliminar tanto la tendencia como la estacionalidad. Los gráficos ACF son una buena herramienta para detectar tanto estacionalidad como tendencia en las series. Si la serie es estacionaria, los valores autocorrelados del ACF deben caer exponencialmente hacia cero, mientras que el ACF de una serie no estacionaria decaerá lentamente y tendrá patrones.
+
+* Modelado de series temporales
+Una vez la serie es estacionaria, se procede al modelado de la serie observando el gráfico PACF (/Partial Autocorrelations/). Se usa PACF en lugar de ACF porque ACF muestra autocorrelaciones que miden la relación entre $y_t$ y $y_{t-k$}. Si $y_t$ y $y_{t-1}$ están correlados, $y_{t-1}$ y $y_{t-2}$ deben estarlo también. Sin embargo, esto puede causar que $y_t$ y $y_{t-2}$ estén también correlados, pero por influencia de $y_{t-1}$, ya que ambos están conectados a él, en lugar de por aportar información nueva.
+
+El objetivo del PACF por tanto, es eliminar esta posibilidad, PACF mide la relación entre $y_t$ y $y_{t-k}$ tras eliminar los efectos de los valores retrasados $1, 2, 3, \dots, k - 1$. El resultado del gráfico PACF puede usarse para estimar los coeficientes en un modelo AR, o usarse para extrar el grado $p$ en un modelo ARIMA($p,d,q$).
+
+Para modelar ambas series se han usado modelos ARIMA. Los modelos ARIMA son una combinación de modelos Autoregresivos (AR), diferenciación y modelos de medias móviles (MA).
+
+Los modelos autoregresivos, predicen una variable usando una combinación lineal de los valores anteriores de dicha variable, es decir, se aplica una regresión contra la propia variable. En general, un modelo autoregresivo tiene la forma
+\[
+y_{t} = c + \phi_{1}y_{t-1} + \phi_{2}y_{t-2} + \dots + \phi_{p}y_{t-p} + \varepsilon_{t},
+\]
+siendo $\varepsilon_{t}$ ruido blanco. El orden del modelo autoregresivo viene dado por $p$. Es este $p$ el que se observa en los gráficos PACF. La selección del orden del modelo la indica el último valor más autocorrelado con la variable.
+
+Los modelos de medias móviles usan los errores de predicciones anteriores en lugar de valores anteriores en la regresión. La fórmula es
+\[
+y_{t} = c + \varepsilon_t + \theta_{1}\varepsilon_{t-1} + \theta_{2}\varepsilon_{t-2} + \dots + \theta_{q}\varepsilon_{t-q},
+\]
+donde $\varepsilon_t$ es ruido blanco. Los modelos de este tipo vienden dados por el orden $q$ y se les denomina MA($q$).
+
+Para el modelado de las series se han usado modelos ARIMA. ARIMA es una combinación de modelos autoregresivos, medias móviles y diferenciación. La combinación da resultado al modelo
+\[
+  y'_{t} = c + \phi_{1}y'_{t-1} + \cdots + \phi_{p}y'_{t-p} + \theta_{1}\varepsilon_{t-1} + \cdots + \theta_{q}\varepsilon_{t-q} + \varepsilon_{t}
+\]
+$y'_{t}$ es la serie diferenciada, a la derecha aparecen los valores retrasados $yt$ y los errores. Esto se conoce como un modelo ARIMA($p,d,$) donde
+
+- $p$ es el orden de la parte autoregresiva.
+- $d$ es el grado de diferenciación (Cuantas veces se ha diferenciado).
+- $q$ es el orden de la parte de medias móviles.
+
+Existe otro tipo de notación para visualizar mejor el modelo, llamada /backshift/:
+\begin{equation}
+  \begin{array}{c c c c}
+    (1-\phi_1B - \cdots - \phi_p B^p) & (1-B)^d y_{t} &= &c + (1 + \theta_1 B + \cdots + \theta_q B^q)\varepsilon_t\\
+    {\uparrow} & {\uparrow} & &{\uparrow}\\
+    \text{AR($p$)} & \text{$d$ diferencias} & & \text{MA($q$)}\\
+  \end{array}
+\end{equation}
+
+En el caso de las series diaria el modelo final fue un ARIMA(1,1,0), ya que se diferenció una vez, y para la serie mensual ARIMA(0,0,1), se decidió usar un modelo de medias móviles en lugar de autoregresivo porque dio mejores resultados.
