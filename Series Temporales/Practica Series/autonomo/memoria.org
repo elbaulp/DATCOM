@@ -103,11 +103,11 @@ La primera impresión al ver la serie de la figura \ref{fig:serie} es que tiene 
 #+CAPTION: La serie temporal
 #+NAME: fig:serie
 #+ATTR_LATEX: :placement [H]
-[[file:img/serie.month.png]]
+[[file:img/seriemonth.png]]
 #+CAPTION: La serie descompuesta
 #+NAME: fig:decompose
 #+ATTR_LATEX: :placement [H]
-[[file:img/serie.month.decompose.png]]
+[[file:img/seriemonthdecompose.png]]
 ** Análisis de Tendencia
 Como conclusión en el apartado anterior, no existe tendencia, luego no se modelará
 ** Análisis de Estacionalidad
@@ -115,7 +115,7 @@ Observando la salida del ACF en la figura \ref{fig:ggacf.train} se puede conclui
 #+CAPTION: ACF
 #+NAME: fig:ggacf.train
 #+ATTR_LATEX: :placement [H]
-[[file:img/ggAcf.train.png]]
+[[file:img/ggAcftrain.png]]
 
 #+CAPTION: GGsubseries
 #+NAME: fig:ggsubseriesplot

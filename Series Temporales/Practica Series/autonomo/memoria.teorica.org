@@ -39,9 +39,9 @@ Los pasos y técnicas seguidas para hacer la serie estacionaria están descritos
 La diferenciación es una técnica usada para hacer a una serie estacionaria. Para ello se calculan las diferencias entre cada observación consecutiva, de esta forma se consigue suavizar o eliminar tanto la tendencia como la estacionalidad. Los gráficos ACF son una buena herramienta para detectar tanto estacionalidad como tendencia en las series. Si la serie es estacionaria, los valores autocorrelados del ACF deben caer exponencialmente hacia cero, mientras que el ACF de una serie no estacionaria decaerá lentamente y tendrá patrones.
 
 * Modelado de series temporales
-Una vez la serie es estacionaria, se procede al modelado de la serie observando el gráfico PACF (/Partial Autocorrelations/). Se usa PACF en lugar de ACF porque ACF muestra autocorrelaciones que miden la relación entre $y_t$ y $y_{t-k$}. Si $y_t$ y $y_{t-1}$ están correlados, $y_{t-1}$ y $y_{t-2}$ deben estarlo también. Sin embargo, esto puede causar que $y_t$ y $y_{t-2}$ estén también correlados, pero por influencia de $y_{t-1}$, ya que ambos están conectados a él, en lugar de por aportar información nueva.
+Una vez la serie es estacionaria, se procede al modelado de la serie observando el gráfico PACF (/Partial Autocorrelations/). Se usa PACF en lugar de ACF porque ACF muestra autocorrelaciones que miden la relación entre $y_t$ y $y_{t-k}$. Si $y_t$ y $y_{t-1}$ están correlados, $y_{t-1}$ y $y_{t-2}$ deben estarlo también. Sin embargo, esto puede causar que $y_t$ y $y_{t-2}$ estén también correlados, pero por influencia de $y_{t-1}$, ya que ambos están conectados a él, en lugar de por aportar información nueva.
 
-El objetivo del PACF por tanto, es eliminar esta posibilidad, PACF mide la relación entre $y_t$ y $y_{t-k}$ tras eliminar los efectos de los valores retrasados $1, 2, 3, \dots, k - 1$. El resultado del gráfico PACF puede usarse para estimar los coeficientes en un modelo AR, o usarse para extrar el grado $p$ en un modelo ARIMA($p,d,q$).
+El objetivo del PACF por tanto, es eliminar esta posibilidad, PACF mide la relación entre $y_t$ y $y_{t-k}$ tras eliminar los efectos de los valores retrasados $1, 2, 3, \dots, k - 1$. El resultado del gráfico PACF puede usarse para estimar los coeficientes en un modelo AR, o usarse para extraer el grado $p$ en un modelo ARIMA($p,d,q$).
 
 Para modelar ambas series se han usado modelos ARIMA. Los modelos ARIMA son una combinación de modelos Autoregresivos (AR), diferenciación y modelos de medias móviles (MA).
 
@@ -57,11 +57,11 @@ y_{t} = c + \varepsilon_t + \theta_{1}\varepsilon_{t-1} + \theta_{2}\varepsilon_
 \]
 donde $\varepsilon_t$ es ruido blanco. Los modelos de este tipo vienden dados por el orden $q$ y se les denomina MA($q$).
 
-Para el modelado de las series se han usado modelos ARIMA. ARIMA es una combinación de modelos autoregresivos, medias móviles y diferenciación. La combinación da resultado al modelo
+El restultado de esta combinación da como resultado el modelo ARIMA:
 \[
   y'_{t} = c + \phi_{1}y'_{t-1} + \cdots + \phi_{p}y'_{t-p} + \theta_{1}\varepsilon_{t-1} + \cdots + \theta_{q}\varepsilon_{t-q} + \varepsilon_{t}
 \]
-$y'_{t}$ es la serie diferenciada, a la derecha aparecen los valores retrasados $yt$ y los errores. Esto se conoce como un modelo ARIMA($p,d,$) donde
+$y'_{t}$ es la serie diferenciada, a la derecha aparecen los valores retrasados $yt$ y los errores. Esto se conoce como un modelo ARIMA($p,d,q$) donde
 
 - $p$ es el orden de la parte autoregresiva.
 - $d$ es el grado de diferenciación (Cuantas veces se ha diferenciado).
