@@ -1,0 +1,111 @@
+-- Preparación de dato
+-- hdfs dfs -mkdir practica
+-- hdfs dfs -put hospital.csv practica
+-- hdfs dfs -ls practica
+
+-- Cargar los datos
+
+-- En las consultas se han aplicado las optimizaciones de https://pig.apache.org/docs/r0.17.0/perf.html#limit
+
+REGISTER '/usr/lib/pig/piggybank.jar' ;
+DEFINE CSVLoader org.apache.pig.piggybank.storage.CSVLoader();
+
+hospital = LOAD 'practica/hospital.csv'
+         USING CSVLoader AS (
+            ProviderID: int,
+            HospitalName: chararray,
+            Address: chararray,
+            City: chararray,
+            State: chararray,
+            ZIPCode: int,
+            CountyName: chararray,
+            PhoneNumber: chararray,
+            MeasureName: chararray,
+            MeasureID: chararray,
+            ComparedtoNational: chararray,
+            Denominator: int
+         );
+-- Guardar los datos
+-- STORE hospital INTO 'practica/hospital.processed'
+--      USING PigStorage(',');
+
+---------------------------------
+-- Operación de proyección (10%),
+---------------------------------
+
+A = FOREACH hospital GENERATE HospitalName, State PARALLEL 12;
+B = LIMIT A 10;
+DUMP B;
+
+-- (COX MEDICAL CENTERS,MO)
+-- (MERCY HOSPITAL LEBANON,MO)
+-- (MERCY HOSPITAL LEBANON,MO)
+-- (RESEARCH MEDICAL CENTER,MO)
+-- (ST JOSEPH MEDICAL CENTER,MO)
+-- (MERCY HOSPITAL WASHINGTON,MO)
+-- (MERCY HOSPITAL SPRINGFIELD,MO)
+-- (BATES COUNTY MEMORIAL HOSPITAL,MO)
+-- (SSM HEALTH ST CLARE HOSPITAL - FENTON,MO)
+-- (SSM HEALTH ST. MARY'S HOSPITAL-AUDRAIN,MO)
+
+-- Operación de selección (20%)
+W = FILTER hospital BY (LOWER(MeasureName) matches '.*hf.*')
+                                 AND (LOWER(ComparedtoNational) matches '.*worse.*')
+                                 PARALLEL 12;
+DUMP W;
+
+-- (10005,MARSHALL MEDICAL CENTER SOUTH,2505 U S HIGHWAY 431 NORTH,BOAZ,AL,35957,MARSHALL,2565938310,Heart failure (HF) 30-Day Mortality Rate,MORT_30_HF,Worse than the National Rate,349)
+-- (260078,OZARKS MEDICAL CENTER,1100 KENTUCKY AVE,WEST PLAINS,MO,65775,HOWELL,4172569111,Heart failure (HF) 30-Day Mortality Rate,MORT_30_HF,Worse than the National Rate,204)
+-- (260119,POPLAR BLUFF REGIONAL MEDICAL CENTER,3100 OAK GROVE ROAD,POPLAR BLUFF,MO,63901,BUTLER,5737857721,Heart failure (HF) 30-Day Mortality Rate,MORT_30_HF,Worse than the National Rate,454)
+-- (260110,SOUTHEASTHEALTH,1701 LACEY ST,CAPE GIRARDEAU,MO,63701,CAPE GIRARDEAU,5733344822,Heart failure (HF) 30-Day Mortality Rate,MORT_30_HF,Worse than the National Rate,383)
+-- (270049,ST VINCENT HEALTHCARE,1233 N 30TH ST,BILLINGS,MT,59101,YELLOWSTONE,4066577000,Heart failure (HF) 30-Day Mortality Rate,MORT_30_HF,Worse than the National Rate,346)
+-- (280003,BRYAN MEDICAL CENTER,1600 SOUTH 48TH ST,LINCOLN,NE,68506,LANCASTER,4024811111,Heart failure (HF) 30-Day Mortality Rate,MORT_30_HF,Worse than the National Rate,642)
+-- (280077,FREMONT HEALTH MEDICAL CENTER,450 EAST 23RD ST,FREMONT,NE,68025,DODGE,4027211610,Heart failure (HF) 30-Day Mortality Rate,MORT_30_HF,Worse than the National Rate,169)
+-- (290001,RENOWN REGIONAL MEDICAL CENTER,1155 MILL STREET,RENO,NV,89502,WASHOE,7759824100,Heart failure (HF) 30-Day Mortality Rate,MORT_30_HF,Worse than the National Rate,453)
+-- (300001,CONCORD HOSPITAL,250 PLEASANT ST,CONCORD,NH,3301,MERRIMACK,6032252711,Heart failure (HF) 30-Day Mortality Rate,MORT_30_HF,Worse than the National Rate,645)
+
+-- Agrupamientos (group) y resúmenes de información (cálculo sobre grupos) (20%)
+
+A = FOREACH W GENERATE HospitalName, State, MeasureName PARALLEL 12;
+B = GROUP A BY State PARALLEL 12;
+C = FOREACH B GENERATE group, COUNT(A) AS NCases PARALLEL 12;
+D = ORDER C BY NCases DESC;
+DUMP D;
+
+-- (AR,7)
+-- (IL,6)
+-- (FL,6)
+-- (CA,5)
+-- (IA,5)
+-- (NY,5)
+-- (MO,4)
+-- (WI,4)
+-- (IN,4)
+-- (WA,4)
+-- (AL,3)
+-- (OK,3)
+-- (KS,3)
+-- (NC,3)
+-- (TN,3)
+-- (MI,3)
+-- (PA,3)
+-- (NV,2)
+-- (TX,2)
+-- (WY,2)
+-- (VT,2)
+-- (KY,2)
+-- (SC,2)
+-- (OR,2)
+-- (NE,2)
+-- (OH,2)
+-- (WV,1)
+-- (MS,1)
+-- (VA,1)
+-- (ME,1)
+-- (ID,1)
+-- (NH,1)
+-- (PR,1)
+-- (CT,1)
+-- (CO,1)
+-- (MT,1)
+-- (NM,1)
