@@ -1,0 +1,576 @@
+#+LATEX_CLASS: article
+#+LATEX_CLASS_OPTIONS: [a4paper]
+#+TITLE: Práctica Impala
+#+AUTHOR: Alejandro Alcalde
+#+LANGUAGE: es
+#+LATEX_COMPILER: xelatex
+#+STARTUP: inlineimages
+#+STARTUP: latexpreview
+#+OPTIONS: H:6
+
+* Base de datos
+
+La base de datos seleccionada es [[https://data.medicare.gov/Hospital-Compare/Complications-and-Deaths-Hospital/ynj2-r877][Complications-and-Deaths-Hospital]], una base de datos que recoge muertes en hospitales por distintas complicaciones tras una operación. Contiene 92.000 instancias y 19 columnas.
+
+* Preparando el entorno
+
+Antes de comenzar, es necesario crear los directorios necesarios:
+
+#+BEGIN_SRC bash :tangle yes
+hdfs dfs -mkdir practica
+#+END_SRC
+
+Posteriormente, se cargan los datos en hadoop:
+
+#+BEGIN_SRC bash :tangle yes
+hdfs dfs -put ~/Downloads/hospital.csv /practica
+#+END_SRC
+
+Hecho esto, se puede comprobar que se ha cargado correctamente con:
+
+#+BEGIN_SRC bash :tangle yes
+hdfs dfs -ls /practica
+#+END_SRC
+
+Una vez configurado todo, se crea la tabla que almacenará los datos del fichero:
+
+#+BEGIN_SRC sql :tangle yes
+CREATE TABLE IF NOT EXISTS Hospital (
+       ProviderID INT,
+       HospitalName STRING,
+       Address STRING,
+       City STRING,
+       State STRING,
+       ZIPCode INT,
+       CountyName STRING,
+       PhoneNumber STRING,
+       MeasureName STRING,
+       MeasureID STRING,
+       ComparedtoNational STRING,
+       Denominator INT
+) ROW FORMAT DELIMITED FIELDS TERMINATED
+  BY '\,' STORED AS TEXTFILE;
+#+END_SRC
+
+Para comprobar la correcta carga:
+
+#+BEGIN_SRC sql :tangle yes
+DESCRIBE Hospital;
+#+END_SRC
+
++--------------------+--------+---------+
+| name               | type   | comment |
++--------------------+--------+---------+
+| providerid         | int    |         |
+| hospitalname       | string |         |
+| address            | string |         |
+| city               | string |         |
+| state              | string |         |
+| zipcode            | int    |         |
+| countyname         | string |         |
+| phonenumber        | string |         |
+| measurename        | string |         |
+| measureid          | string |         |
+| comparedtonational | string |         |
+| denominator        | int    |         |
++--------------------+--------+---------+
+
+Ahora se cargan los datos en la tabla que se acaba de crear:
+
+#+BEGIN_SRC sql :tangle yes
+LOAD DATA INPATH '/practica/hospital.csv' OVERWRITE INTO TABLE Hospital;
+#+END_SRC
+
+* Análisis de datos
+
+En este análisis se quiere saber en qué estados suele haber muertes por complicaciones según el tipo de enfermedad y cómo se relaciona con la media del resto del país. Se plantean las siguientes cuestiones:
+
+- ¿En qué estados hay más complicaciones de Heart failure (HF)?
+- Infecciones en sangre tras la operación etc.
+
+Primero se echa un vistazo preliminar a los datos, se muestran en el documento solo los 10 primeros:
+
+#+BEGIN_SRC sql :tangle yes
+select hospitalname, measurename
+       from hospital
+       limit 10;
+#+END_SRC
+
++--------------------------------+----------------------------------------------------------------------+
+| hospitalname                   | measurename                                                          |
++--------------------------------+----------------------------------------------------------------------+
+| Hospital Name                  | Measure Name                                                         |
+| ST JOSEPH MEDICAL CENTER       | Death rate for chronic obstructive pulmonary disease (COPD) patients |
+|  MO                            |                                                                      |
+|  -94.605907)"                  |                                                                      |
+| BATES COUNTY MEMORIAL HOSPITAL | Heart failure (HF) 30-Day Mortality Rate                             |
+|  MO                            |                                                                      |
+|  -94.343708)"                  |                                                                      |
+| MERCY HOSPITAL LEBANON         | A wound that splits open  after surgery on the abdomen or pelvis     |
+|  MO                            |                                                                      |
+|  -92.635875)"                  |                                                                      |
++--------------------------------+----------------------------------------------------------------------+
+
+** Fallo cardíaco tras operación
+
+Con esta consulta se seleccionan los hospitales y el estado al que pertenecen en los que los pacientes que han muerto a causa de un fallo cardíaco tras una operación. Además, en estos hospitales/estados, la media de este tipo de muerte es la peor con respecto al resto del país.
+
+#+BEGIN_SRC sql :tangle yes
+select hospitalname, state
+       from hospital
+       where  lower(measurename) like '%hf%' and
+       LOWER(comparedtonational) like '%worse%';
+#+END_SRC
+
++--------------------------------------------------+-------+
+| hospitalname                                     | state |
++--------------------------------------------------+-------+
+| MARSHALL MEDICAL CENTER SOUTH                    | AL    |
+| OZARKS MEDICAL CENTER                            | MO    |
+| POPLAR BLUFF REGIONAL MEDICAL CENTER             | MO    |
+| SOUTHEASTHEALTH                                  | MO    |
+| ST VINCENT HEALTHCARE                            | MT    |
+| BRYAN MEDICAL CENTER                             | NE    |
+| FREMONT HEALTH MEDICAL CENTER                    | NE    |
+| RENOWN REGIONAL MEDICAL CENTER                   | NV    |
+| CONCORD HOSPITAL                                 | NH    |
+| PRESBYTERIAN HOSPITAL                            | NM    |
+| SUTTER ROSEVILLE MEDICAL CENTER                  | CA    |
+| ONEIDA HEALTHCARE                                | NY    |
+| HIGHLAND HOSPITAL                                | NY    |
+| MERCY HOSPITAL OF BUFFALO                        | NY    |
+| CAYUGA MEDICAL CENTER AT ITHACA                  | NY    |
+| ALAMANCE REGIONAL MEDICAL CENTER                 | NC    |
+| NEW HANOVER REGIONAL MEDICAL CENTER              | NC    |
+| CATAWBA VALLEY MEDICAL CENTER                    | NC    |
+| SUMMA HEALTH SYSTEM                              | OH    |
+| LICKING MEMORIAL HOSPITAL                        | OH    |
+| ST CHARLES BEND                                  | OR    |
+| WILLIAMSPORT REGIONAL MEDICAL CENTER             | PA    |
+| ALTON MEMORIAL HOSPITAL                          | IL    |
+| BLESSING HOSPITAL                                | IL    |
+| WILKES-BARRE GENERAL HOSPITAL                    | PA    |
+| BARNES-KASSON COUNTY HOSPITAL                    | PA    |
+| PIEDMONT MEDICAL CENTER                          | SC    |
+| TRIDENT MEDICAL CENTER                           | SC    |
+| TENNOVA HEALTHCARE                               | TN    |
+| PARKWEST MEDICAL CENTER                          | TN    |
+| BAYLOR UNIVERSITY MEDICAL CENTER                 | TX    |
+| EAST TEXAS MEDICAL CENTER ATHENS                 | TX    |
+| UNIVERSITY OF VERMONT MEDICAL CENTER             | VT    |
+| NORTH COUNTRY HOSPITAL AND HEALTH CENTER         | VT    |
+| BON SECOURS MEMORIAL REGIONAL MEDICAL CENTER     | VA    |
+| WALLA WALLA GENERAL HOSPITAL                     | WA    |
+| PROVIDENCE SACRED HEART MEDICAL CENTER           | WA    |
+| YAKIMA REGIONAL MEDICAL AND CARDIAC CENTER       | WA    |
+| PROVIDENCE HOLY FAMILY HOSPITAL                  | WA    |
+| BLUEFIELD REGIONAL MEDICAL CENTER                | WV    |
+| ASPIRUS RIVERVIEW HOSPITAL CLINICS INC           | WI    |
+| THEDACARE REGIONAL MEDICAL CENTER - APPLETON INC | WI    |
+| OCONOMOWOC MEMORIAL HOSPITAL                     | WI    |
+| THEDACARE MEDICAL CENTER - WAUPACA INC           | WI    |
+| SHERIDAN MEMORIAL HOSPITAL                       | WY    |
+| WYOMING MEDICAL CENTER                           | WY    |
+| ST ROSE DOMINICAN HOSPITALS - SIENA CAMPUS       | NV    |
+| AUXILIO MUTUO HOSPITAL                           | PR    |
+| PROVIDENCE HOSPITAL                              | AL    |
+| MEDICAL CENTER ENTERPRISE                        | AL    |
+| JOHNSON REGIONAL MEDICAL CENTER                  | AR    |
+| NORTHWEST MEDICAL CENTER-SPRINGDALE              | AR    |
+| ST BERNARDS MEDICAL CENTER                       | AR    |
+| MEDICAL CENTER SOUTH ARKANSAS                    | AR    |
+| ARKANSAS METHODIST MEDICAL CENTER                | AR    |
+| MAGNOLIA HOSPITAL                                | AR    |
+| ST JOSEPH HOSPITAL                               | CA    |
+| RIDEOUT MEMORIAL HOSPITAL                        | CA    |
+| MARIAN REGIONAL MEDICAL CENTER                   | CA    |
+| NORTH COLORADO MEDICAL CENTER                    | CO    |
+| MIDDLESEX HOSPITAL                               | CT    |
+| CITRUS MEMORIAL HOSPITAL                         | FL    |
+| MUNROE REGIONAL MEDICAL CENTER                   | FL    |
+| OCALA REGIONAL MEDICAL CENTER                    | FL    |
+| FORT WALTON BEACH MEDICAL CENTER                 | FL    |
+| REGIONAL MEDICAL CENTER BAYONET POINT            | FL    |
+| MEASE COUNTRYSIDE HOSPITAL                       | FL    |
+| KOOTENAI HEALTH                                  | ID    |
+| PROCTOR HOSPITAL                                 | IL    |
+| ADVOCATE BROMENN MEDICAL CENTER                  | IL    |
+| MEMORIAL MEDICAL CENTER                          | IL    |
+| METHODIST MEDICAL CENTER OF ILLINOIS             | IL    |
+| LUTHERAN HOSPITAL OF INDIANA                     | IN    |
+| SAINT JOSEPH REGIONAL MEDICAL CENTER             | IN    |
+| REID HEALTH                                      | IN    |
+| INDIANA UNIVERSITY HEALTH ARNETT HOSPITAL        | IN    |
+| ALLEN HOSPITAL                                   | IA    |
+| SPENCER MUNICIPAL HOSPITAL                       | IA    |
+| UNIVERSITY OF IOWA HOSPITAL CLINICS              | IA    |
+| MERCY MEDICAL CENTER-NORTH IOWA                  | IA    |
+| BURGESS HEALTH CENTER                            | IA    |
+| MERCY HOSPITAL-FORT SCOTT                        | KS    |
+| LAWRENCE MEMORIAL HOSPITAL                       | KS    |
+| ALLEN COUNTY REGIONAL HOSPITAL                   | KS    |
+| BAPTIST HEALTH PADUCAH                           | KY    |
+| LOURDES HOSPITAL                                 | KY    |
+| SOUTHERN MAINE HEALTH CARE                       | ME    |
+| BRONSON METHODIST HOSPITAL                       | MI    |
+| MCLAREN PORT HURON                               | MI    |
+| SPARROW CLINTON HOSPITAL                         | MI    |
+| BAPTIST MEM HOSP/ GOLDEN TRIANGLE INC            | MS    |
+| PHELPS COUNTY REGIONAL MEDICAL CENTER            | MO    |
++--------------------------------------------------+-------+
+
+Podemos agrupar para conocer en qué estados ocurre más veces este tipo de muerte:
+
+#+BEGIN_SRC sql :tangle yes
+select state, count(measurename)
+       from hospital
+       where  lower(measurename) like '%hf%' and
+       LOWER(comparedtonational) like '%worse%'
+       group by state
+       order by count(measurename) desc;
+#+END_SRC
+
++-------+--------------------+
+| state | count(measurename) |
++-------+--------------------+
+| FL    | 6                  |
+| IL    | 6                  |
+| AR    | 6                  |
+| IA    | 5                  |
+| IN    | 4                  |
+| MO    | 4                  |
+| NY    | 4                  |
+| WI    | 4                  |
+| CA    | 4                  |
+| WA    | 4                  |
+| MI    | 3                  |
+| KS    | 3                  |
+| AL    | 3                  |
+| NC    | 3                  |
+| PA    | 3                  |
+| SC    | 2                  |
+| NV    | 2                  |
+| NE    | 2                  |
+| VT    | 2                  |
+| KY    | 2                  |
+| TX    | 2                  |
+| OH    | 2                  |
+| WY    | 2                  |
+| TN    | 2                  |
+| MT    | 1                  |
+| PR    | 1                  |
+| CO    | 1                  |
+| VA    | 1                  |
+| ME    | 1                  |
+| OR    | 1                  |
+| ID    | 1                  |
+| NH    | 1                  |
+| NM    | 1                  |
+| WV    | 1                  |
+| MS    | 1                  |
+| CT    | 1                  |
++-------+--------------------+
+
+Parece que en el estado FL (Florida), es donde más pacientes mueren por un fallo cardíaco tras ser operados, aunque pueda ser algo alto, quizá sea debido a que el 20% de la población de Florida tiene más de 65 años[fn:1]. Los otros dos estados con 6 muertes son Ilinóis y Arkansas, ambos también con un porcentaje de personas con más de 65 años algo alto (15% y 16% respectivamente). Sin embargo, mirando a uno de los estados con menos muertes (CT, Connecticut) el porcentaje de mayores también está entorno al 16%, por tanto quizá cabe pensar que influye el número de habitantes del estado. Florida tiene 20 millones de habitantes, mientras que Connecticut 3.5 millones. Si se muestran este tipo de muertes agrupando por el nombre del hospital, se observa que en ningún hospital ha ocurrido en más de una ocasión, con lo cual puede conlcuirse que son casos aislados:
+
+#+BEGIN_SRC sql :tangle yes
+select hospitalname, state, count(measurename)
+       from hospital
+       where  lower(measurename) like '%hf%' and
+       LOWER(comparedtonational) like '%worse%'
+       group by hospitalname, state
+       order by count(measurename) desc;
+#+END_SRC
+
++--------------------------------------------------+-------+--------------------+
+| hospitalname                                     | state | count(measurename) |
++--------------------------------------------------+-------+--------------------+
+| LOURDES HOSPITAL                                 | KY    | 1                  |
+| BAYLOR UNIVERSITY MEDICAL CENTER                 | TX    | 1                  |
+| ST ROSE DOMINICAN HOSPITALS - SIENA CAMPUS       | NV    | 1                  |
+| PHELPS COUNTY REGIONAL MEDICAL CENTER            | MO    | 1                  |
+| MARIAN REGIONAL MEDICAL CENTER                   | CA    | 1                  |
+| MIDDLESEX HOSPITAL                               | CT    | 1                  |
+| MEDICAL CENTER ENTERPRISE                        | AL    | 1                  |
+| PROVIDENCE HOSPITAL                              | AL    | 1                  |
+| SPENCER MUNICIPAL HOSPITAL                       | IA    | 1                  |
+| PROVIDENCE SACRED HEART MEDICAL CENTER           | WA    | 1                  |
+| CONCORD HOSPITAL                                 | NH    | 1                  |
+| NORTH COLORADO MEDICAL CENTER                    | CO    | 1                  |
+| MUNROE REGIONAL MEDICAL CENTER                   | FL    | 1                  |
+| MERCY HOSPITAL-FORT SCOTT                        | KS    | 1                  |
+| SUMMA HEALTH SYSTEM                              | OH    | 1                  |
+| PIEDMONT MEDICAL CENTER                          | SC    | 1                  |
+| MCLAREN PORT HURON                               | MI    | 1                  |
+| MERCY HOSPITAL OF BUFFALO                        | NY    | 1                  |
+| ARKANSAS METHODIST MEDICAL CENTER                | AR    | 1                  |
+| INDIANA UNIVERSITY HEALTH ARNETT HOSPITAL        | IN    | 1                  |
+| WILKES-BARRE GENERAL HOSPITAL                    | PA    | 1                  |
+| SPARROW CLINTON HOSPITAL                         | MI    | 1                  |
+| ALAMANCE REGIONAL MEDICAL CENTER                 | NC    | 1                  |
+| KOOTENAI HEALTH                                  | ID    | 1                  |
+| BARNES-KASSON COUNTY HOSPITAL                    | PA    | 1                  |
+| OCALA REGIONAL MEDICAL CENTER                    | FL    | 1                  |
+| UNIVERSITY OF VERMONT MEDICAL CENTER             | VT    | 1                  |
+| ST BERNARDS MEDICAL CENTER                       | AR    | 1                  |
+| MEDICAL CENTER SOUTH ARKANSAS                    | AR    | 1                  |
+| WYOMING MEDICAL CENTER                           | WY    | 1                  |
+| AUXILIO MUTUO HOSPITAL                           | PR    | 1                  |
+| MEMORIAL MEDICAL CENTER                          | IL    | 1                  |
+| PRESBYTERIAN HOSPITAL                            | NM    | 1                  |
+| ASPIRUS RIVERVIEW HOSPITAL  CLINICS INC          | WI    | 1                  |
+| ALLEN HOSPITAL                                   | IA    | 1                  |
+| BLESSING HOSPITAL                                | IL    | 1                  |
+| NEW HANOVER REGIONAL MEDICAL CENTER              | NC    | 1                  |
+| LICKING MEMORIAL HOSPITAL                        | OH    | 1                  |
+| THEDACARE MEDICAL CENTER - WAUPACA INC           | WI    | 1                  |
+| BURGESS HEALTH CENTER                            | IA    | 1                  |
+| TENNOVA HEALTHCARE                               | TN    | 1                  |
+| BAPTIST MEM HOSP/ GOLDEN TRIANGLE INC            | MS    | 1                  |
+| MEASE COUNTRYSIDE HOSPITAL                       | FL    | 1                  |
+| POPLAR BLUFF REGIONAL MEDICAL CENTER             | MO    | 1                  |
+| BRONSON METHODIST HOSPITAL                       | MI    | 1                  |
+| MERCY MEDICAL CENTER-NORTH IOWA                  | IA    | 1                  |
+| TRIDENT MEDICAL CENTER                           | SC    | 1                  |
+| ST CHARLES BEND                                  | OR    | 1                  |
+| WILLIAMSPORT REGIONAL MEDICAL CENTER             | PA    | 1                  |
+| SOUTHERN MAINE HEALTH CARE                       | ME    | 1                  |
+| METHODIST MEDICAL CENTER OF ILLINOIS             | IL    | 1                  |
+| PROCTOR HOSPITAL                                 | IL    | 1                  |
+| FORT WALTON BEACH MEDICAL CENTER                 | FL    | 1                  |
+| YAKIMA REGIONAL MEDICAL AND CARDIAC CENTER       | WA    | 1                  |
+| SUTTER ROSEVILLE MEDICAL CENTER                  | CA    | 1                  |
+| RENOWN REGIONAL MEDICAL CENTER                   | NV    | 1                  |
+| RIDEOUT MEMORIAL HOSPITAL                        | CA    | 1                  |
+| MAGNOLIA HOSPITAL                                | AR    | 1                  |
+| REID HEALTH                                      | IN    | 1                  |
+| LUTHERAN HOSPITAL OF INDIANA                     | IN    | 1                  |
+| NORTH COUNTRY HOSPITAL AND HEALTH CENTER         | VT    | 1                  |
+| MARSHALL MEDICAL CENTER SOUTH                    | AL    | 1                  |
+| HIGHLAND HOSPITAL                                | NY    | 1                  |
+| REGIONAL MEDICAL CENTER BAYONET POINT            | FL    | 1                  |
+| ALTON MEMORIAL HOSPITAL                          | IL    | 1                  |
+| ST VINCENT HEALTHCARE                            | MT    | 1                  |
+| OZARKS MEDICAL CENTER                            | MO    | 1                  |
+| ADVOCATE BROMENN MEDICAL CENTER                  | IL    | 1                  |
+| WALLA WALLA GENERAL HOSPITAL                     | WA    | 1                  |
+| LAWRENCE MEMORIAL HOSPITAL                       | KS    | 1                  |
+| CITRUS MEMORIAL HOSPITAL                         | FL    | 1                  |
+| BAPTIST HEALTH PADUCAH                           | KY    | 1                  |
+| CAYUGA MEDICAL CENTER AT ITHACA                  | NY    | 1                  |
+| SAINT JOSEPH REGIONAL MEDICAL CENTER             | IN    | 1                  |
+| FREMONT HEALTH MEDICAL CENTER                    | NE    | 1                  |
+| PARKWEST MEDICAL CENTER                          | TN    | 1                  |
+| EAST TEXAS MEDICAL CENTER ATHENS                 | TX    | 1                  |
+| BRYAN MEDICAL CENTER                             | NE    | 1                  |
+| THEDACARE REGIONAL MEDICAL CENTER - APPLETON INC | WI    | 1                  |
+| ST JOSEPH HOSPITAL                               | CA    | 1                  |
+| ONEIDA HEALTHCARE                                | NY    | 1                  |
+| NORTHWEST MEDICAL CENTER-SPRINGDALE              | AR    | 1                  |
+| BLUEFIELD REGIONAL MEDICAL CENTER                | WV    | 1                  |
+| CATAWBA VALLEY MEDICAL CENTER                    | NC    | 1                  |
+| PROVIDENCE HOLY FAMILY HOSPITAL                  | WA    | 1                  |
+| OCONOMOWOC MEMORIAL HOSPITAL                     | WI    | 1                  |
+| SOUTHEASTHEALTH                                  | MO    | 1                  |
+| SHERIDAN MEMORIAL HOSPITAL                       | WY    | 1                  |
+| UNIVERSITY OF IOWA HOSPITAL  CLINICS             | IA    | 1                  |
+| JOHNSON REGIONAL MEDICAL CENTER                  | AR    | 1                  |
+| BON SECOURS MEMORIAL REGIONAL MEDICAL CENTER     | VA    | 1                  |
+| ALLEN COUNTY REGIONAL HOSPITAL                   | KS    | 1                  |
++--------------------------------------------------+-------+--------------------+
+
+Como contraposición, también es posible observar en qué estados la media es mejor que la nacional:
+
+#+BEGIN_SRC sql :tangle yes
+select measurename, state, count(measurename)
+       from hospital
+       where  lower(measurename) like '%hf%' and
+       LOWER(comparedtonational) like '%better%'
+       group by state, measurename
+       order by count(measurename) desc;
+#+END_SRC
+
++-------+--------------------+
+| state | count(measurename) |
++-------+--------------------+
+| CA    | 28                 |
+| IL    | 20                 |
+| NY    | 14                 |
+| MA    | 14                 |
+| TX    | 14                 |
+| FL    | 13                 |
+| OH    | 9                  |
+| MI    | 7                  |
+| PA    | 6                  |
+| NJ    | 5                  |
+| IN    | 5                  |
+| CT    | 4                  |
+| LA    | 4                  |
+| MO    | 3                  |
+| MD    | 3                  |
+| AZ    | 3                  |
+| WV    | 2                  |
+| SC    | 2                  |
+| KS    | 2                  |
+| DC    | 2                  |
+| MN    | 2                  |
+| WI    | 1                  |
+| NH    | 1                  |
+| NV    | 1                  |
+| VA    | 1                  |
+| GA    | 1                  |
+| NC    | 1                  |
++-------+--------------------+
+
+Como se aprecia, California es el estado con menos muertes por este tipo de complicaciones. Sin embargo, aquí vuelven a aparecer IL y FL, y con mayores valores que para los peores casos. Sería interesante investigarlo.
+
+#+BEGIN_SRC sql :tangle yes
+select measurename, comparedtonational, state, count(measurename)
+       from hospital
+       where  lower(measurename) like '%hf%' and
+       LOWER(comparedtonational) like '%better%' or
+       lower(measurename) like '%hf%' and
+       LOWER(comparedtonational) like '%worse%'
+       group by state, measurename, comparedtonational
+       order by count(measurename) desc
+#+END_SRC
+
+Según los resultados, parece ser que California sigue siendo la que menor tasa de muertes por HF tiene. Al princpipio se pensaba que FL tenía una gran tasa de muertes por HF, pero esta tabla agrupando por casos mejores y peores que la media nacional muestra que en FL hay 13 casos con resultados mejores que la media. Mirandolo de una forma más granular, a nivel de hospitales, todos y cada uno de ellos se ha encontrado con un solo caso para cada paciente. Luego no se puede afirmar que a nivel de estado haya más muertes por HF con respecto al resto.
+
++------------------------------------------+-------------------------------+-------+--------------------+
+| measurename                              | comparedtonational            | state | count(measurename) |
++------------------------------------------+-------------------------------+-------+--------------------+
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | CA    | 28                 |
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | IL    | 20                 |
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | MA    | 14                 |
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | NY    | 14                 |
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | TX    | 14                 |
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | FL    | 13                 |
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | OH    | 9                  |
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | MI    | 7                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | AR    | 6                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | FL    | 6                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | IL    | 6                  |
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | PA    | 6                  |
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | NJ    | 5                  |
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | IN    | 5                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | IA    | 5                  |
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | LA    | 4                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | MO    | 4                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | WI    | 4                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | CA    | 4                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | IN    | 4                  |
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | CT    | 4                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | WA    | 4                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | NY    | 4                  |
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | AZ    | 3                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | NC    | 3                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | AL    | 3                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | MI    | 3                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | PA    | 3                  |
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | MD    | 3                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | KS    | 3                  |
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | MO    | 3                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | WY    | 2                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | KY    | 2                  |
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | KS    | 2                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | TN    | 2                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | NV    | 2                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | NE    | 2                  |
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | DC    | 2                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | OH    | 2                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | VT    | 2                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | TX    | 2                  |
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | MN    | 2                  |
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | WV    | 2                  |
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | SC    | 2                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | SC    | 2                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | CT    | 1                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | ME    | 1                  |
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | NV    | 1                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | VA    | 1                  |
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | WI    | 1                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | WV    | 1                  |
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | GA    | 1                  |
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | NH    | 1                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | NM    | 1                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | PR    | 1                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | OR    | 1                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | MS    | 1                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | MT    | 1                  |
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | NC    | 1                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | NH    | 1                  |
+| Heart failure (HF) 30-Day Mortality Rate | Better than the National Rate | VA    | 1                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | ID    | 1                  |
+| Heart failure (HF) 30-Day Mortality Rate | Worse than the National Rate  | CO    | 1                  |
++------------------------------------------+-------------------------------+-------+--------------------+
+
+** Infecciones en sangre
+
+En este caso se buscan los estados con más casos de infecciones en sangre en los pacientes tras ser operados. Las siguientes consultas muestran los datos para los peores y mejores casos comparados con la media nacional:
+
+#+BEGIN_SRC sql :tangle yes
+  select state, count(measurename), measurename
+         from hospital
+         where  lower(measurename) like '%blood stream infection%' and
+         lower(comparedtonational) like '%worse%'
+         group by state, measurename
+         order by count(measurename) desc;
+#+END_SRC
+
++-------+--------------------+--------------------------------------+
+| state | count(measurename) | measurename                          |
++-------+--------------------+--------------------------------------+
+| CA    | 6                  | Blood stream infection after surgery |
+| NY    | 4                  | Blood stream infection after surgery |
+| FL    | 3                  | Blood stream infection after surgery |
+| KY    | 3                  | Blood stream infection after surgery |
+| MS    | 2                  | Blood stream infection after surgery |
+| GA    | 2                  | Blood stream infection after surgery |
+| TN    | 2                  | Blood stream infection after surgery |
+| MI    | 2                  | Blood stream infection after surgery |
+| IL    | 1                  | Blood stream infection after surgery |
+| IN    | 1                  | Blood stream infection after surgery |
+| IA    | 1                  | Blood stream infection after surgery |
+| OK    | 1                  | Blood stream infection after surgery |
+| WV    | 1                  | Blood stream infection after surgery |
+| TX    | 1                  | Blood stream infection after surgery |
+| AL    | 1                  | Blood stream infection after surgery |
+| OR    | 1                  | Blood stream infection after surgery |
+| WA    | 1                  | Blood stream infection after surgery |
+| NJ    | 1                  | Blood stream infection after surgery |
+| NE    | 1                  | Blood stream infection after surgery |
+| NV    | 1                  | Blood stream infection after surgery |
+| VA    | 1                  | Blood stream infection after surgery |
+| AR    | 1                  | Blood stream infection after surgery |
++-------+--------------------+--------------------------------------+
+
+#+BEGIN_SRC sql :tangle yes
+  select state, count(measurename), measurename
+         from hospital
+         where  lower(measurename) like '%blood stream infection%' and
+         lower(comparedtonational) like '%better%'
+         group by state, measurename
+         order by count(measurename) desc;
+#+END_SRC
+
++-------+--------------------+--------------------------------------+
+| state | count(measurename) | measurename                          |
++-------+--------------------+--------------------------------------+
+| OH    | 2                  | Blood stream infection after surgery |
+| NC    | 2                  | Blood stream infection after surgery |
+| MA    | 2                  | Blood stream infection after surgery |
+| FL    | 2                  | Blood stream infection after surgery |
+| WI    | 2                  | Blood stream infection after surgery |
+| MD    | 1                  | Blood stream infection after surgery |
+| NY    | 1                  | Blood stream infection after surgery |
+| TX    | 1                  | Blood stream infection after surgery |
+| IN    | 1                  | Blood stream infection after surgery |
+| LA    | 1                  | Blood stream infection after surgery |
++-------+--------------------+--------------------------------------+
+
+Según los resultados, parece que en California se producen más muertes por infecciones en la sangre que en otros estados, las diferencias son significativas con respecto al resto de estados.
+
+* Footnotes
+
+[fn:1] Datos obtenidos de https://www.census.gov/quickfacts/fact/table/FL/PST045217

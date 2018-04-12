@@ -1,0 +1,79 @@
+hdfs dfs -mkdir practica
+
+hdfs dfs -put ~/Downloads/hospital.csv /practica
+
+hdfs dfs -ls /practica
+
+
+CREATE TABLE IF NOT EXISTS Hospital (
+       ProviderID INT,
+       HospitalName STRING,
+       Address STRING,
+       City STRING,
+       State STRING,
+       ZIPCode INT,
+       CountyName STRING,
+       PhoneNumber STRING,
+       MeasureName STRING,
+       MeasureID STRING,
+       ComparedtoNational STRING,
+       Denominator INT
+) ROW FORMAT DELIMITED FIELDS TERMINATED
+  BY '\,' STORED AS TEXTFILE;
+
+DESCRIBE Hospital;
+
+LOAD DATA INPATH '/practica/hospital.csv' OVERWRITE INTO TABLE Hospital;
+
+select hospitalname, measurename
+       from hospital
+       limit 10;
+
+select hospitalname, state
+       from hospital
+       where  lower(measurename) like '%hf%' and
+       LOWER(comparedtonational) like '%worse%';
+
+select state, count(measurename)
+       from hospital
+       where  lower(measurename) like '%hf%' and
+       LOWER(comparedtonational) like '%worse%'
+       group by state
+       order by count(measurename) desc;
+
+select hospitalname, state, count(measurename)
+       from hospital
+       where  lower(measurename) like '%hf%' and
+       LOWER(comparedtonational) like '%worse%'
+       group by hospitalname, state
+       order by count(measurename) desc;
+
+select measurename, state, count(measurename)
+       from hospital
+       where  lower(measurename) like '%hf%' and
+       LOWER(comparedtonational) like '%better%'
+       group by state, measurename
+       order by count(measurename) desc;
+
+select measurename, comparedtonational, state, count(measurename)
+       from hospital
+       where  lower(measurename) like '%hf%' and
+       LOWER(comparedtonational) like '%better%' or
+       lower(measurename) like '%hf%' and
+       LOWER(comparedtonational) like '%worse%'
+       group by state, measurename, comparedtonational
+       order by count(measurename) desc
+
+select state, count(measurename), measurename
+       from hospital
+       where  lower(measurename) like '%blood stream infection%' and
+       lower(comparedtonational) like '%worse%'
+       group by state, measurename
+       order by count(measurename) desc;
+
+select state, count(measurename), measurename
+       from hospital
+       where  lower(measurename) like '%blood stream infection%' and
+       lower(comparedtonational) like '%better%'
+       group by state, measurename
+       order by count(measurename) desc;
