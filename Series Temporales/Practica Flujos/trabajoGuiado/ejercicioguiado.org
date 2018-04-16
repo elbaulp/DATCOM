@@ -1,0 +1,124 @@
+#+TITLE: Ejercicio Guiado - Flujo de Datos
+#+AUTHOR: Alejandro Alcalde \\ algui91@ugr.es
+#+EMAIL: algui91@ugr.es
+#+OPTIONS: ':nil *:t -:t ::t <:t H:6 \n:nil ^:t arch:headline
+#+OPTIONS: author:t c:nil creator:comment d:(not "LOGBOOK") date:t
+#+OPTIONS: e:t email:nil f:t inline:t num:t p:nil pri:nil stat:t
+#+OPTIONS: tags:t tasks:t tex:t timestamp:t toc:t todo:t |:t
+#+CREATOR: Emacs 25.3.1 (Org mode 8.2.10)
+#+DESCRIPTION:
+#+EXCLUDE_TAGS: noexport
+#+KEYWORDS:
+#+LANGUAGE: es
+#+SELECT_TAGS: export
+#+LATEX_CLASS: article
+#+PROPERTY: header-args:R  :session *R*
+
+* Ejercicio 1 - Clasificación
+
+Se pide comparar la eficacia de un Hoeffding Tree con un clasificador
+Naïve Bayes, para un flujo de datos de 1.000.000 de instancias
+generadas con un generador RandomTreeGenerator, suponiendo una
+frecuencia de muestreo de 10.000 y con el método de evaluación
+Interleaved Test-Then-Train.
+
+Para Naive Bayes:
+#+BEGIN_SRC bash
+$ java -cp moa.jar moa.DoTask "EvaluateInterleavedTestThenTrain \
+  -l bayes.NaiveBayes \
+  -i 1000000 \
+  -f 10000"
+#+END_SRC
+
+
+Para Hoeffding:
+#+BEGIN_SRC bash
+$ java -cp moa.jar moa.DoTask "EvaluateInterleavedTestThenTrain \
+  -l trees.HoeffdingTree \
+  -i 1000000 \
+  -f 10000"
+#+END_SRC
+
+Para realizar los experimentos, repeticiones y tomas de resultados se ha escrito el siguiente código bash:
+
+#+INCLUDE: "~/Documents/Estudios/Máster/Series Temporales/Practica Flujos/trabajoGuiado/launchExperiment.sh" src bash
+
+Un ejemplo de uso (Internamente se genera una semilla aleatoria):
+
+#+BEGIN_SRC bash
+./launchExperiment.sh hoeff "EvaluateInterleavedTestThenTrain \
+  -l trees.HoeffdingTree \
+  -i 1000000 \
+  -f 10000"
+#+END_SRC
+
+Para leer los resultados y generar el dataset para comparar ambos métodos se ha escrito el siguiente código en R:
+
+#+INCLUDE: "~/Documents/Estudios/Máster/Series Temporales/Practica Flujos/trabajoGuiado/ejercicioGuiado.R" src R :exports both :results output verbatim
+
+Los resultados de los tests estadísticos indican que los datos siguen una distribución normal, por tanto se usa un test paramétrico para comparar ambos algoritmos.
+
+Tras aplicar el test de Student se concluye que existen diferencias significativas entre los porcentajes de ambos clasificadores, y por tanto uno de los algoritmos es mejor que otro. Obteniendo los promedios de acierto se deduce cual es mejor. En este caso, Naive Bayes tiene un promedio del 73%, mientras que Hoeffding del 94%.
+
+* Ejercicio 2 - Concept Drift
+
+La tarea queda como sigue:
+
+#+BEGIN_SRC bash
+$ EvaluatePrequential -l bayes.NaiveBayes \
+  -s (ConceptDriftStream -s (generators.SEAGenerator -f 2) \
+  -d (generators.SEAGenerator -f 3) -p 20000 -w 100) -i 100000 -f 1000
+#+END_SRC
+
+El resultado es:
+
+[[file:ejer2.png]]
+
+* Ejercicio 3
+Entrenar un modelo estático Naïve Bayes sobre 100.000 instancias de la función 2 del generador SEAGenerator.
+
+El comando en cuestión es:
+#+BEGIN_SRC bash
+LearnModel -l bayes.NaiveBayes \
+   -s (generators.SEAGenerator -f 2) \
+   -m 100000
+#+END_SRC
+
+Seguidamente, evaluarlo con un flujo de datos con desvío de concepto generado por el generador de datos SEAGenerator, con un desvío de concepto centrado en la instancia 20.000 en una ventana de 100 instancias. Para simular el desvío de concepto, hacer que el simulador genere la función –f 2 al principio, y luego la función –f 3.
+#+BEGIN_SRC bash
+EvaluateModel -m \
+   (LearnModel -l bayes.NaiveBayes -s (generators.SEAGenerator -f 2) \
+   -m 100000) -s\
+   (ConceptDriftStream -s (generators.SEAGenerator -f 2) -d \
+   (generators.SEAGenerator -f 3)) -i 100000
+#+END_SRC
+
+El resultado es
+
+#+BEGIN_SRC bash
+classified instances = 100,000
+classifications correct (percent) = 80.344
+Kappa Statistic (percent) = 57.301
+Kappa Temporal Statistic (percent) = 54.583
+Kappa M Statistic (percent) = 39.098
+model training instances = 100,000
+model serialized size (bytes) = 1,936
+#+END_SRC
+
+El problema con este resultado (El Kappa es malo), es que el modelo se entrena de forma estacionaria. Inicialmente se entrena con la función f2, pero luego se produce un concept drift que no es detectado por el algoritmo, ya que es estacionario.
+
+* Ejercicio 4
+
+¿Qué ocurriría si pudiésemos detectar un cambio de concepto y reentrenar un modelo estacionario?
+
+Se pide: Evaluar, y entrenar online con el método TestThenTrain, un modelo estacionario Naïve Bayes que se adapta (re-entrena) tras la detección de un cambio de concepto mediante el método DDM (función SingleClassifierDrift). Usar el flujo de datos del ejercicio anterior.
+
+#+BEGIN_SRC bash
+EvaluateInterleavedTestThenTrain -l drift.SingleClassifierDrift -s \
+   (ConceptDriftStream -s (generators.SEAGenerator -f 2) -d\
+   (generators.SEAGenerator -f 3) -p 20000 -w 100) -i 100000
+#+END_SRC
+
+Ahora los resultados mejoran sustancialmente. Es lo que se esperaba, dado que ahora se entrena de nuevo el modelo cuando se produce el cambio de concepto.
+
+[[file:ejer4.png]]
