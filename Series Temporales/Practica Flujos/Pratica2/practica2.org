@@ -1,0 +1,476 @@
+#+TITLE: Trabajo Autónomo II: Minería de Flujo de Datos
+#+AUTHOR: Alejandro Alcalde \\ algui91@ugr.es \\ Series Temporales y Minería de Flujos de Datos \\ Máster en Ciencia de Datos
+#+EMAIL: algui91@ugr.es
+#+OPTIONS: ':nil *:t -:t ::t <:t H:6 \n:nil ^:t arch:headline
+#+OPTIONS: author:t c:nil creator:comment d:(not "LOGBOOK") date:t
+#+OPTIONS: e:t email:nil f:t inline:t num:t p:nil pri:nil stat:t
+#+OPTIONS: tags:t tasks:t tex:t timestamp:t toc:t todo:t |:t
+#+CREATOR: Emacs 25.3.1 (Org mode 8.2.10)
+#+DESCRIPTION:
+#+EXCLUDE_TAGS: noexport
+#+KEYWORDS:
+#+LANGUAGE: es
+#+SELECT_TAGS: export
+#+LATEX_CLASS: article
+#+PROPERTY: header-args:R  :session *R* :exports code
+
+\newpage
+
+Para todas las ejecuciones de este documento se ha usado el siguiente script:
+
+#+INCLUDE: "~/Documents/Estudios/Máster/Series Temporales/Practica Flujos/Pratica2/launchExperiment.sh" src bash
+
+Donde se han modificado las instrucciones para MOA necesarias para cada ejercicio. Así mismo, para leer y generar resultados se ha creado el siguiente script en R:
+
+#+INCLUDE: "~/Documents/Estudios/Máster/Series Temporales/Practica Flujos/Pratica2/practica2.R" src R :eval never
+
+* Entrenamiento Offline
+
+** Ejercicio 1
+/Entrenar un clasificador HoeffdingTree offline (estacionario, aprender modelo únicamente), sobre un total de 1.000.000 de instancias procedentes de un flujo obtenido por el generador WaveFormGenerator con semilla aleatoria igual a 2. Evaluar posteriormente (sólo evaluación) con 1.000.000 de instancias generadas por el mismo tipo de generador, con semilla aleatoria igual a 4. Repita el proceso varias veces con la misma semilla en evaluación y diferentes semillas en entrenamiento, para crear una población de resultados. Anotar como resultados los valores de porcentajes de aciertos en la clasificación y estadístico Kappa./
+
+#+BEGIN_SRC bash
+EvaluateModel -m \
+   (LearnModel -l trees.HoeffdingTree -s\
+   (generators.WaveformGenerator -i 2) -m 1000000) -s \
+   (generators.WaveformGenerator -i 4)
+#+END_SRC
+
+Cada parámetro significa lo siguiente:
+
+- =-m= Especifica el modelo a evaluar.
+- Dentro de =LearnModel=:
+  - =-l= especifica el modelo a entrenar.
+  - =-s= El generador de datos, con una semilla de 2.
+  - =-m 1000000= indica que se entrene con ese número de datos.
+  - =-s= indica que los datos para test se generen con un generador =WaveformGenerator= con semilla 4.
+
+Para generar los experimentos con distintas semillas de entrenamiento se ha usado la siguiente llamada en el script en bash escrito:
+
+#+BEGIN_SRC bash
+EvaluateModel -m \
+   (LearnModel -l trees.HoeffdingTree -s\
+   (generators.WaveformGenerator -i 2) -m 1000000) -s \
+   (generators.WaveformGenerator -i $RANDOM)
+#+END_SRC
+
+El resultado de los 30 experimentos es el siguiente:
+
+| Experimento | Kappa  | Accuracy |
+|-------------+--------+----------|
+| <c>         | <c>    | <c>      |
+| 1           | 76.895 | 84.595   |
+| 2           | 76.629 | 84.418   |
+| 3           | 76.874 | 84.581   |
+| 4           | 77     | 84.665   |
+| 5           | 76.983 | 84.654   |
+| 6           | 76.985 | 84.656   |
+| 7           | 76.638 | 84.424   |
+| 8           | 76.835 | 84.555   |
+| 9           | 77.031 | 84.686   |
+| 10          | 76.879 | 84.585   |
+| 11          | 77.005 | 84.67    |
+| 12          | 76.659 | 84.438   |
+| 13          | 76.832 | 84.553   |
+| 14          | 76.587 | 84.39    |
+| 15          | 76.94  | 84.625   |
+| 16          | 76.97  | 84.646   |
+| 17          | 76.823 | 84.548   |
+| 18          | 76.598 | 84.397   |
+| 19          | 76.972 | 84.647   |
+| 20          | 76.795 | 84.529   |
+| 21          | 77.005 | 84.669   |
+| 22          | 77.043 | 84.694   |
+| 23          | 76.546 | 84.363   |
+| 24          | 76.875 | 84.582   |
+| 25          | 76.98  | 84.652   |
+| 26          | 76.684 | 84.455   |
+| 27          | 76.865 | 84.575   |
+| 28          | 76.616 | 84.409   |
+| 29          | 77.049 | 84.698   |
+| 30          | 77.052 | 84.7     |
+
+** Ejercicio 2
+/Repetir el paso anterior, sustituyendo el clasificador por HoeffdingTree adaptativo./
+
+#+BEGIN_SRC bash
+EvaluateModel -m \
+   (LearnModel -l trees.HoeffdingAdaptiveTree -s\
+   (generators.WaveformGenerator -i 2) -m 1000000) -s \
+   (generators.WaveformGenerator -i $RANDOM)
+#+END_SRC
+
+En este apartado simplemente hay que cambiar el tipo de algoritmo a aprender por =HoeffdingAdaptiveTree=. Los resultados de este experimento son:
+
+| Experimento |  kappa |    acc |
+|-------------+--------+--------|
+|         <c> |    <c> |    <c> |
+|           1 | 77.042 | 84.693 |
+|           2 | 76.661 | 84.439 |
+|           3 | 76.745 | 84.496 |
+|           4 | 77.116 | 84.743 |
+|           5 | 76.649 | 84.431 |
+|           6 | 76.766 | 84.509 |
+|           7 | 76.437 | 84.291 |
+|           8 | 76.837 | 84.557 |
+|           9 | 76.915 | 84.609 |
+|          10 | 76.732 | 84.487 |
+|          11 | 76.506 | 84.337 |
+|          12 | 76.895 | 84.595 |
+|          13 | 76.743 | 84.494 |
+|          14 | 76.611 | 84.406 |
+|          15 | 76.711 | 84.473 |
+|          16 | 76.871 | 84.579 |
+|          17 | 76.501 | 84.332 |
+|          18 | 76.554 | 84.368 |
+|          19 | 76.721 | 84.479 |
+|          20 | 76.799 | 84.532 |
+|          21 | 76.761 | 84.506 |
+|          22 | 76.577 | 84.383 |
+|          23 | 76.832 | 84.554 |
+|          24 |  76.95 | 84.632 |
+|          25 | 76.756 | 84.502 |
+|          26 | 76.502 | 84.334 |
+|          27 |  76.98 | 84.652 |
+|          28 | 76.661 | 84.439 |
+|          29 | 76.861 | 84.573 |
+|          30 | 76.528 | 84.351 |
+
+** Ejercicio 3
+/Responda a la pregunta: ¿Cree que algún clasificador es significativamente mejor que el otro en este tipo de problemas? Razone su respuesta./
+
+Para responder a la pregunta, se hace uso de los 30 experimentos realizados con cada algoritmo. Antes de aplicar ningún test estadístico para comprobar si hay diferencias significativas, se comprueba la normalidad de los datos con un /Shaphiro Test/:
+
+#+BEGIN_SRC R :eval never
+shapiro.test(results1.1$kappa)
+shapiro.test(results1.1$acc)
+shapiro.test(results1.2$acc)
+shapiro.test(results1.2$kappa)
+#+END_SRC
+
+El test indica que los datos son normales (p-value > .05), por tanto se procede a ejecutar un test paramétrico, en concreto el t-test.
+#+BEGIN_SRC R :eval never
+t.test(results1.1$acc, results1.2$acc)
+t.test(results1.1$kappa, results1.2$kappa)
+#+END_SRC
+Ambos tests obtienen un p-value <.05, por tanto existen diferencias significativas entre ambos algoritmos. Se puede concluir por tanto que el primer algoritmo es ligeramente mejor que el segundo. Esto se debe a que en media el algoritmo 1 tiene un acierto del 84.56863 y el algoritmo 2 de 84.49253.
+
+* Entrenamiento Online
+
+** Ejercicio 1
+/Entrenar un clasificador HoeffdingTree online, mediante el método Interleaved Test-Then-Train, sobre un total de 1.000.000 de instancias procedentes de un flujo obtenido por el generador WaveFormGenerator con semilla aleatoria igual a 2, con una frecuencia de muestreo igual a 10.000. Pruebe con otras semillas aleatorias para crear una población de resultados. Anotar los valores de porcentajes de aciertos en la clasificación y estadístico Kappa./
+
+#+BEGIN_SRC bash
+EvaluateInterleavedTestThenTrain -l trees.HoeffdingTree \
+   -s (generators.WaveformGenerator -i $RANDOM) \
+   -i 1000000 \
+   -f 10000
+#+END_SRC
+En esta ocasión, se usa =EvaluateInterleavedTestThenTrain=. Esta tarea evalúa el clasificador con un flujo de datos testeando y luego entrenando con cada ejemplo en la secuencia, los parámetros son:
+
+- =l=, el clasificador a entrenar.
+- =s=, el generador de flujos del cual aprender.
+- =i=, el número de instancias sobre las que aprender/testear.
+- =f=, frecuencia de muestreo.
+
+Tras ejecutar el experimento 30 veces, estos son los resultados:
+
+| kappa            | acc     |
+|------------------+---------|
+| <c>              | <c>     |
+| 75.9485308108601 | 83.9655 |
+| 75.9021567589747 | 83.9348 |
+| 75.7733217901268 | 83.8487 |
+| 75.917364785347  | 83.9446 |
+| 75.8529908749476 | 83.9025 |
+| 75.8583436742033 | 83.9057 |
+| 75.7800988158036 | 83.8528 |
+| 75.6641178430277 | 83.7761 |
+| 75.8533736746959 | 83.9025 |
+| 75.7509044720659 | 83.8348 |
+| 75.8193808897089 | 83.8797 |
+| 75.6562900708174 | 83.7703 |
+| 75.8039950802292 | 83.8692 |
+| 75.6923936944537 | 83.7949 |
+| 75.778100201784  | 83.8522 |
+| 75.7484091669002 | 83.833  |
+| 75.7309563485849 | 83.8216 |
+| 75.9109673654295 | 83.9412 |
+| 75.8559918747912 | 83.9039 |
+| 75.9524324406409 | 83.9681 |
+| 75.674500936796  | 83.7831 |
+| 75.9161247797512 | 83.9441 |
+| 75.8292552309369 | 83.8867 |
+| 75.7579724908968 | 83.838  |
+| 75.853050911243  | 83.9012 |
+| 75.8633068749135 | 83.9087 |
+| 75.8713376752766 | 83.9159 |
+| 75.829053295984  | 83.8858 |
+| 75.7606311965536 | 83.8403 |
+| 75.7117419305858 | 83.8079 |
+
+** Ejercicio 2
+/Repetir el paso anterior, sustituyendo el clasificador por HoeffdingTree adaptativo./
+
+La única diferencia con respecto al anterior es el tipo de modelo:
+#+BEGIN_SRC bash
+EvaluateInterleavedTestThenTrain -l trees.HoeffdingAdaptiveTree \
+   -s (generators.WaveformGenerator -i $RANDOM) \
+   -i 1000000 \
+   -f 10000
+#+END_SRC
+Los resultados de las 30 ejecuciones son:
+
+| kappa            | acc     |
+|------------------+---------|
+| <c>              | <c>     |
+| 75.527879688934  | 83.6851 |
+| 75.6404393037664 | 83.7605 |
+| 75.6738439147189 | 83.7832 |
+| 75.7047118839109 | 83.8036 |
+| 75.7923450416045 | 83.8609 |
+| 75.2884577226069 | 83.5252 |
+| 75.792463751718  | 83.8628 |
+| 75.8980334633954 | 83.9317 |
+| 75.7109052738511 | 83.8079 |
+| 75.89158788077   | 83.9275 |
+| 75.7036071051764 | 83.8024 |
+| 75.6063856761981 | 83.7377 |
+| 75.6779252184808 | 83.7852 |
+| 75.8661013437959 | 83.9108 |
+| 75.9028944071571 | 83.9357 |
+| 75.8442367489516 | 83.8959 |
+| 75.518049537354  | 83.6784 |
+| 75.7832776227997 | 83.856  |
+| 75.823461831089  | 83.8834 |
+| 75.9293895836357 | 83.954  |
+| 75.7722613239492 | 83.8478 |
+| 75.8696057953061 | 83.9138 |
+| 75.7734751967683 | 83.8497 |
+| 75.757715113049  | 83.8385 |
+| 75.7841563773521 | 83.8559 |
+| 75.6651508664938 | 83.7769 |
+| 75.8391782614052 | 83.8931 |
+| 75.7548696642114 | 83.8367 |
+| 75.740668517912  | 83.8266 |
+| 75.7169982422218 | 83.8107 |
+
+** Ejercicio 3
+/Responda a la pregunta: ¿Cree que algún clasificador es mejor que el otro en este tipo de problemas? Razone su respuesta./
+
+Igualmente, se debe comprobar que los datos son normales mediante tests estadísticos. En este caso, el segundo algoritmo no es normal, por tanto hay que hacer la comparación con un test no paramétrico, como el de Wilcoxon
+
+En este caso, el test de wilcoxon tiene un p-value de 0.05099 para el /Accuracy/, y de 0.04621 para el /Kappa/. Podríamos arriesgarnos y concluir que existen diferencias significativas entre ambos algoritmos, en dicho caso, el algoritmo 1 es ligeramente mejor, con un 83.87% de acierto frente a un 83.82792% de acierto del algoritmo 2.
+
+* Entrenamiento Online con Concept Drift
+** Ejercicio 1
+/Entrenar un clasificador HoeffdingTree online, mediante el método Interleaved Test-Then-Train, sobre un total de 2.000.000 de instancias muestreadas con una frecuencia de 100.000, sobre datos procedentes de un generador de flujos RandomRBFGeneratorDrift, con semilla aleatorio igual a 1 para generación de modelos y de instancias, generando 2 clases, 7 atributos, 3 centroides en el modelo, drift en todos los centroides y velocidad de cambio igual a 0.001. Pruebe con otras semillas aleatorias. Anotar los valores de porcentajes de aciertos en la clasificación y estadístico Kappa. Compruebe la evolución de la curva de aciertos en la GUI de MOA./
+
+#+BEGIN_SRC bash
+EvaluateInterleavedTestThenTrain -l trees.HoeffdingTree \
+   -s (generators.RandomRBFGeneratorDrift -r 1 -i 1 \
+       -s 0.001 -k 3 -a 7 -n 3) \
+   -i 2000000
+#+END_SRC
+
+El significado de cada uno de los parámetros es el siguiente:
+
+- =-l=, el modelo a aprender.
+- =-s=, el generador a usar (/RandomRBFGeneratorDrift/), con los siguiente parámetros:
+  - =-r=, la semilla para la generación del modelo.
+  - =-i=, semilla para la generación de instancias.
+  - =-s=, La velocidad de cambio de los centroides en el modelo.
+  - =-k=, el número de centroides con /drift/.
+  - =-a=, número de atributos a generar.
+  - =-n=, Número de centroides en el modelo.
+- =-i=, Máximo número de instancias sobre las que entrenar.
+
+Como se puede apreciar en la imagen de abajo, el algoritmo empieza a empeorar su rendimiento conforme va aumentando el /concept drift/, debido a que no está preparado para detectarlo.
+
+[[file:img/ejer3.1.png]]
+
+** Ejercicio 2
+Repetir el paso anterior, sustituyendo el clasificador por HoeffdingTree adaptativo.
+
+#+BEGIN_SRC bash
+EvaluateInterleavedTestThenTrain -l trees.HoeffdingAdaptiveTree \
+   -s (generators.RandomRBFGeneratorDrift -r 1 -i 1 \
+       -s 0.001 -k 3 -a 7 -n 3) \
+   -i 2000000
+#+END_SRC
+
+En este caso  lo único que ha cambiado ha sido el algoritmo. El resultado de este algoritmo se muestra en la gráfica siguiente:
+
+[[file:img/ejer3.2.png]]
+
+Como se aprecia, el resultado es mucho mejor, es el resultado de aplicar un modelo adaptativo cuando se produce /Content Drift/
+
+** Ejercicio 3
+/Responda a la pregunta: ¿Cree que algún clasificador es mejor que el otro en este tipo de problemas? Razone su respuesta./
+
+Los resultados del test de normalidad para el /accuray/ para ambos modelos se puede considerar normales (Para el primer algoritmo es normal, con un p-value de 0.95, y para el segundo algoritmo podemos considerarlo normal, con un p-value de 0.05039). Debido a esto, se aplica un t.test, que da como resultado un p-value de 5.939e-08. Por tanto existen diferencias significativas entre ambos algoritmos. Si comparamos las medias de /accuracy/ entre ambos, vemos que el segundo algoritmo (=HoeffdingAdaptiveTree=) es bastante mejor, con una media de acierto del 93.88% frente al 80.36% de =HoeffdingTree=. Esto es debido a la capacidad de adaptarse a los cambios de concepto de =HoeffdingAdaptiveTree=.
+
+Para el valor /Kappa/, el test de normalidad indica normalidad para =HoeffdingTree=, pero no normalidad para =HoeffdingAdaptiveTree=, por tanto es necesario hacer un test de Wilcoxon. Los resultados del test muestran un p-value de 2.493e-13, por tanto existen diferencias significativas entre ambas poblaciones de /Kappa/. En este caso, la media de /kappa/ de =HoeffdingAdaptiveTree= es bastante superior a la de =HoeffdingTree=, 78.43% frente a 33.66%. Por tanto se puede concluir que =HoeffdingAdaptiveTree= se comporta bastante mejor para este tipo de problema.
+
+* Entrenamiento Online con Concept Drift, con mecanismos para olvidar instancias pasadas
+
+** Ejercicio 1
+/Repita la experimentación del apartado anterior, cambiando el método de evaluación “Interleaved Test-Then-Train” por el método de evaluación “Prequential”, con una ventana deslizante de tamaño 1.000./
+
+/EvaluatePrequential/ evalúa el clasificador sobre un flujo de datos testeando y luego entrenando con cada ejemplo en secuencia. Es posible usar una ventana deslizante o un mecanismo de olvido del factor de desvanecimiento. En la siguiente instrucción no aparece la ventana deslizante porque por defecto está fijada a 1000.
+
+#+BEGIN_SRC bash
+EvaluatePrequential -l trees.HoeffdingTree \
+   -s (generators.RandomRBFGeneratorDrift -s 0.001 -k 3 -a 7 -n 3) \
+   -i 2000000
+#+END_SRC
+#+BEGIN_SRC bash
+EvaluatePrequential -l trees.HoeffdingAdaptiveTree \
+   -s (generators.RandomRBFGeneratorDrift -s 0.001 -k 3 -a 7 -n 3) \
+   -i 2000000
+#+END_SRC
+
+Para generar las poblaciones se han ejecutado los algoritmos 30 veces del siguiente modo:
+
+#+BEGIN_SRC bash
+EvaluatePrequential -l trees.HoeffdingTree \
+   -s (generators.RandomRBFGeneratorDrift -r $RANDOM \
+       -i $RANDOM -s 0.001 -k 3 -a 7 -n 3) \
+   -i 2000000
+#+END_SRC
+#+BEGIN_SRC bash
+EvaluatePrequential -l trees.HoeffdingAdaptiveTree \
+   -s (generators.RandomRBFGeneratorDrift -r $RANDOM \
+       -i $RANDOM -s 0.001 -k 3 -a 7 -n 3) \
+   -i 2000000
+#+END_SRC
+
+** Ejercicio 2
+/¿Qué efecto se nota en ambos clasificadores? ¿A qué es debido? Justifique los cambios relevantes en los resultados de los clasificadores./
+
+En las siguientes figuras se muestran los resultados de ambas ejecuciones, queda bastante claro que =HoeffdingAdaptiveTree= es bastante mejor.
+
+[[file:img/ejer4.1.png]]
+
+[[file:img/ejer4.2.png]]
+
+La comparativa de ambos se muestra a continuación (=HoeffdingAdaptiveTree= en azul, =HoeffdingTree= en rojo):
+
+[[file:img/ejer4.png]]
+
+Es esta comparativa no parece necesario ejecutar tests estadísticos, ya que a simple vista se puede apreciar el mejor rendimiento de =HoeffdingAdaptiveTree= en la siguiente tabla:
+
+|              kappa |  acc |
+|--------------------+------|
+|                <c> |  <c> |
+|   90.2654292945681 | 95.2 |
+|   61.7247305108577 | 85.3 |
+|   78.2792373421757 | 89.1 |
+| -0.344036697248051 | 98.6 |
+|   48.8047755440747 | 84.7 |
+|   56.9642043440839 | 93.2 |
+|   95.9200992231869 |   98 |
+|   98.2951445717403 | 99.2 |
+|   87.6440638248013 | 94.2 |
+|   96.6169070072314 | 99.2 |
+|   66.7061260728026 | 87.4 |
+|   27.7978339350181 |   89 |
+|    83.210765008747 | 91.9 |
+|   60.1618043638147 | 93.5 |
+|    87.601339055382 | 93.8 |
+|   79.6211191748633 | 90.2 |
+|     87.98803951935 | 94.4 |
+|   88.6974323978504 | 94.7 |
+| -0.182149362476401 | 98.9 |
+|   81.1012709395293 | 92.8 |
+|   24.3787751717379 | 67.9 |
+|   87.3141389207504 | 95.2 |
+|   89.1938188643904 | 94.6 |
+|   71.7352915841158 | 89.5 |
+|    97.250687328168 | 98.9 |
+|    85.867663134968 | 93.2 |
+|   68.5085975322882 | 91.7 |
+|   92.3229676336315 |   97 |
+|   93.9113492450073 | 99.6 |
+|   95.5319425489049 | 97.8 |
+
+Mientras que =HoeffdingTree=:
+
+|              kappa |  acc |
+|--------------------+------|
+|                <c> |  <c> |
+|   30.9259140268586 | 74.2 |
+|                  1 |  100 |
+|   38.2843036412261 | 74.2 |
+|   24.1967821904414 | 69.3 |
+|   47.4602317564481 | 74.7 |
+|   37.0545218920671 | 79.6 |
+|   43.4326327771454 | 83.7 |
+| -0.194663918470047 | 96.5 |
+|                  1 |  100 |
+|   -12.589191437622 | 43.7 |
+|   5.59560590456574 | 82.4 |
+|   33.3091553836235 | 66.9 |
+|                  1 |  100 |
+|   23.4010838861644 | 66.7 |
+|   20.7663595399825 | 62.3 |
+| -0.748416810592925 | 94.4 |
+|   46.9466220602187 |   83 |
+|   21.6229099442652 | 65.8 |
+|                  1 |  100 |
+|   27.3912869544345 | 63.7 |
+|   38.4062557820214 | 74.7 |
+|   9.11844895486224 | 90.4 |
+|   42.9787604962664 | 84.3 |
+|   29.6200345423143 | 67.4 |
+|   33.4530254611497 | 80.8 |
+|   19.5124198154604 | 66.8 |
+|                  1 |  100 |
+|   53.6162740615579 | 97.2 |
+|    6.5782019436092 | 65.7 |
+|   6.07328220621277 | 90.3 |
+
+Queda a la vista que =HoeffdingTree= en este caso fluctua mucho más en los resultados, aunque en varias ejecuciones ha obtenido un 100%, varía mucho en sus resultados. Por contra, =HoeffdingAdaptiveTree= no suele bajar del 90% de precisión.
+
+* Entrenamiento Online con Concept Drift, con mecanismos para reinicializar modelos
+
+** Ejercicio 1
+/Repita la experimentación del apartado 2.3, cambiando el modelo (learner) a un clasificador simple basado en reemplazar el clasificador actual cuando se detecta un cambio de concepto (SingleClassifierDrift). Como detector de cambio de concepto, usar el método DDM con sus parámetros por defecto. Como modelo a aprender, usar un clasificador HoeffdingTree./
+
+Las tarea a ejecutar ahora es la siguiente:
+#+BEGIN_SRC bash
+EvaluateInterleavedTestThenTrain -l (drift.SingleClassifierDrift \
+                                     -l trees.HoeffdingTree) \
+   -s (generators.RandomRBFGeneratorDrift -r 1 -i 1 \
+       -s 0.001 -k 3 -a 7 -n 3) \
+   -r 1 -i 2000000
+#+END_SRC
+donde
+
+- =-l= ahora especifica el modelo a aprender envuelto en un =SingleClassifierDrift=.
+- =-s= es el generador de flujos, con los mismos parámetros de ejercicios anteriores.
+
+/SingleClassifierDrift/ controla el cambio de concepto con un envoltorio en un clasificador. El método de detección de cambio de concepto funciona comparando las estadísticas de dos ventanas de tiempo. Una ventana tiene las estadísticas de errores de todos los datos, la segunda contiene los datos desde el inicio hasta que el error empieza a incrementar considerablemente.
+
+** Ejercicio 2
+/Repita el paso anterior cambiando el clasificador HoeffdingTree por un clasificador HoeffdingTree adaptativo./
+
+Simplemente hay que cambiar el modelo:
+#+BEGIN_SRC bash
+EvaluateInterleavedTestThenTrain -l (drift.SingleClassifierDrift \
+                                     -l trees.HoeffdingAdaptiveTree) \
+   -s (generators.RandomRBFGeneratorDrift -r 1 -i 1 \
+       -s 0.001 -k 3 -a 7 -n 3) \
+   -r 1 -i 2000000
+#+END_SRC
+
+** Ejercicio 3
+/Responda a la siguiente pregunta: ¿Qué diferencias se producen entre los métodos de los apartados 2.3, 2.4 y 2.5? Explique similitudes y diferencias entre las diferentes metodologías, y discuta los resultados obtenidos por cada una de ellas en el flujo de datos propuesto./
+
+Los resultados de las ejecuciones de los dos apartados anteriores se muestran en la siguiente imagen:
+
+[[file:img/ejer5.png]]
+
+Como se puede apreciar, ahora tanto =HoeffdingAdaptiveTree= como =HoeffdingTree= se comportan de forma similar. Esto se debe seguramente al trabajo que hace =SingleClassifierDrift=, ya que a pesar de que =HoeffdingTree= no es capaz de detectar y reaccionar ante un cambio de concepto, =SingleClassifierDrift= sí que controla este comportamiento. Cabe destacar además, que el tiempo de ejecución de =HoeffdingTree= es bastante menor, y sin verse afectado el rendimiento.
+
+En los apartados 2.3 y 2.4 el algoritmo que mejor ha funcionado ha sido =HoeffdingAdaptiveTree=, debido al hecho de que puede manejar cambios de concepto. Sin embargo, en este apartado, al envolver a los algoritmos de clasificación en un =SingleClassifierDrift= se ha conseguido que =HoeffdingTree= iguale en rendimiento a =HoeffdingAdaptiveTree=. Aunque =HoeffdingTree= no detecte cambio de concepto per se, el funcionamiento de =SingleClassifierDrift= permite a este algoritmo trabajar en problemas con cambio de concepto.
