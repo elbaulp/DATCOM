@@ -104,3 +104,12 @@ ejer4.1 <- readClassificationsCorrect(name = "ejer4.1")
 ejer4.2 <- readClassificationsCorrect(name = "ejer4.2")
 write.table(ejer4.1, file = "res/ejer4.1.table", row.names = F)
 write.table(ejer4.2, file = "res/ejer4.2.table", row.names = F)
+
+### Ejercicio 5
+ejer5.1 <- readClassificationsCorrect(name = "ejer5.1")
+ejer5.2 <- readClassificationsCorrect(name = "ejer5.2")
+write.table(ejer5.1, file = "res/ejer5.1.table", row.names = F)
+write.table(ejer5.2, file = "res/ejer5.2.table", row.names = F)
+
+mean(ejer5.1$acc)
+mean(ejer5.2$acc)

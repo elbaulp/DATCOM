@@ -16,6 +16,104 @@
 
 \newpage
 
+* Parte Teórica
+** Clasificación en Flujo de datos
+El problema de clasificación en flujo de datos es distinto a la clasificación tradicional. Esto se debe a que en este tipo de problemas no se disponen de los datos previamente, en flujo de datos la información va llegando sobre la marcha y es necesario procesarla y descartarla sobre la marcha.
+
+La clasificación en flujo de datos es supervisada, por lo que es necesario conocer las etiquetas de las clases previamente. Los algoritmos de clasificación en flujo de datos deben ser capaces de maximizar la precisión y ser capaces de detectar y reaccionar ante situaciones cambiantes, como el cambio de concepto.
+
+** Algoritmos utilizados
+
+*** HoeffdingTree
+Un árbol de Hoeffding (VFDT, de /Very Fast Decision Tree/) es un árbol incremental capaz de construir árboles de decisión a partir de flujos masivos de datos, asumiendo que la distribución que genera los datos no cambia a lo largo del tiempo. Se basa en el hecho de que a menudo una población pequeña puede ser suficiente para escoger un atributo de división óptimo. Esta idea se basa en la cota de Hoeffding, la cual cuantifica el número de observaciones necesarias para estimar algunas estadísticas dentro de una precisión deseada. La cota de Hoeffding se muestra en la siguiente ecuación:
+
+Sea $\mathbf{Z_1}, \dots, \mathbf{Z_N}$ variables independientes acotadas tal que $\mathbf{z_{i}}$ reside en el intervalo $[a_i,b_i]$ con probabilidad 1. Si sus sumas son ${\mathbf S}_N=\sum_{i1}^N \mathbf z_i$. Entonces, para cada $\varepsilon > 0$ se tiene
+
+\[P \lbrace \left|S_N- E [ {\mathbf S}_N]\right| > \varepsilon \rbrace \le \exp \lbrace -2\varepsilon^2 / \sum_{i=1}^ N (b_i-a_i)^2\rbrace\]
+
+Esta ecuación proporciona la cota superior a la probabilidad de que la suma de las variables aleatorias se desvíe una cierta cantidad de su valor esperado.
+
+Cada nodo interno del árbol tiene una prueba que separa los ejemplos, de este modo se crean dos ramas que separan el atributo en función de su valor. La decisión más importante en la construcción del árbol es cuando dividir un nodo y con qué prueba discriminante (número de variables, valores etc). Un método habitual para dicha tarea es usar la ganancia de información (ID3) o el ratio de ganancia (C4.5), ambos se basan en minimizar la entropía de las probabilidades de las diferentes hojas generadas según cómo se separe el nodo. En este punto es donde entra en juego la cota de Hoeffding, ya que para datos estáticos la ganancia se puede calcular fácilmente a través de los propios datos. Sin embargo, en datos incrementales, se usa la cota de Hoeffding, ya que establece con certeza $1-\delta$, que la media verdadera de una variable aleatoria de rango R no difiere de la media estimada después de n observaciones independientes por más que:
+
+\[\varepsilon =\sqrt {\frac{R^2 \ln (\delta)}{2N}}\]
+
+Una característica muy llamativa de los árboles Hoeffding, que no comparte con otros algoritmos incrementales de aprendizaje de árboles de decisión es que teóricamente, tiene garantizado el rendimiento.
+
+*** HoeffdingAdaptiveTree
+La diferencia de este algoritmo con los árboles de Hoeffding es que usa ADWIN para monitorizar el rendimiento de las ramas del árbol. Cuando la precisión de una rama decrementa se reemplaza por una nueva si ésta es mejor.
+
+ADWIN (/ADaptive sliding WINdow/) es una técnica para detectar cambio de concepto. Dada una ventana $W$, si hay dos subventanas $W_0, W_1$ suficientemente grandes y con medias suficientemente distintas, se puede asumir que los valores esperados sean distintos y se puede eliminar la parte obsoleta de $W$.
+
+Más precisamente, un fragmento antiguo de la ventana se elimina sí y solo sí hay suficientes evidencias de que su valor medio difiere de los del resto de la ventana. ADWIN detecta y se adapta automáticamente a la velocidad de cambio actual.
+
+Los pasos básicos que sigue el algoritmo HoeffdingAdaptiveTree son los siguientes:
+
+- Mantiene el árbol en consistencia con una ventana deslizante $W$.
+- Para cada nodo, guarda estadísticas para las distintas divisiones posibles.
+- Construye ramas del árbol alternativas cuando otras divisiones son mejores (Mediante ADWIN).
+- Evalúa periódicamente el modelo con nuevas instancias y sustituye un nodo por la rama alternativa si ésta es mejor.
+- Como consecuencia, es 5 o 6 veces más lento que =HoeffdingTree=.
+
+** Modos de evaluación/validación
+Los distintos métodos de evaluación usados se listan a continuación.
+*** EvaluateModel
+Evalúa un modelo estático sobre un flujo de datos. Un modelo es estático cuando los datos de los que aprende son estáticos. Esto quiere decir que ciertas propiedades, o el concepto inherente a los datos no varían con el tiempo.
+*** InterleavedTest-Then-Train
+Esta tarea evalúa el clasificador con un flujo de datos testeando y luego entrenando con cada ejemplo en la secuencia.
+*** Prequential
+/EvaluatePrequential/ evalúa el clasificador sobre un flujo de datos testeando y luego entrenando con cada ejemplo en secuencia. Es posible usar una ventana deslizante o un mecanismo de olvido del factor de desvanecimiento.
+
+El factor de olvido \alpha se usa como sigue:
+
+\[
+E_i = \frac{S_{i}}{B_{i}}
+\]
+donde
+
+\[
+S_{i} = L_{i} + \alpha \times S_{i - i}
+\]
+y
+\[
+B_{i} = n_{i} + \alpha \times B_{i-1}
+\]
+
+donde $n_{i}$ es el número de ejemplos usados para calcular la función de pérdida $L_{i}$. $n_{i} = 1$ ya que la pérdida $L_{i}$ se calcula para cada ejemplo individual.
+** Concept Drift
+El /Concept Drift/ ocurre cuando la distribución inherente en los datos va cambiando con el tiempo. En función de la velocidad a la que se produce este cambio en la distribución, se pueden distinguir varios tipos de /Concept Drift/:
+
+- Repentino: La distribución de los datos cambia completamente de forma rápida a otro tipo de distribución.
+- Gradual: La distribución de los datos va cambiando gradualmente, por lo que se genera una mezcla de ambas distribuciones en el proceso hasta que la distribución anterior se ve reemplazada completamente por la nueva.
+- Incremental: La velocidad de cambio es mucho más lenta, y la diferencia entre ambas distribuciones no suele ser estadísticamente significativa.
+
+*** Técnicas de Concept Drift en Clasificación
+Como solución a este problema se existen varias aproximaciones. La más sencilla e ineficáz es re-entrenar cada vez que llega una nueva instancia, pero es muy costoso. Otra opción es detectar el cambio de concepto y re-entrenar cuando los cambios sean significativos. Por último, es posible usar un aprendizaje adaptativo, que sea capaz de detectar y reaccionar ante desvíos y cambios de concepto.
+
+Para poder crear este tipo de algoritmos, es necesario detectar que se está produciendo un cambio de concepto, para ello es necesario desarrollar detectores de /Concept Drift/. Los detectores se pueden basar en herramientas externas al clasificador. Dichas herramientas pueden ser medir propiedades de la distribución como desviación típica etc. Cuando se detecta el cambio, se puede re-entrenar el modelo sobre nuevas instancias o desde el inicio en función de la brusquedad del cambio.
+
+Otro tipo de detectores se basan en ventanas deslizantes, el principal problema de estos métodos es la elección del tamaño de las ventanas. Si la ventana es demasiado pequeña, se puede sobre-ajustar, si es demasiado grande se pueden disponer de distintos conceptos. La solución es implementar una ventana deslizante adaptativa o varias ventanas.
+
+El entrenamiento Online es útil también para detectar /Concept Drift/, estos clasificadores se actualizan con cada nueva instancia. No todos los clasificadores pueden ser online, deben cumplir una serie de requisitos. Primero, cada objeto debe procesarse una única vez durante el entrenamiento. Segundo, el sistema debe consumir una memoria de procesamiento limitada independientemente de la cantidad de datos a procesar. Por último, es posible pausar el aprendizaje en cualquier momento y su precisión no debería verse afectada en comparación a un clasificador entrenado de forma offline sobre los datos vistos hasta el momento.
+
+También es posible usar /emsembles/ para detectar el cambio de concepto. Son algoritmos que incorporan conjuntos de clasificadores sencillos. De esta forma, todos deciden colectivamente, incrementando la precisión al distribuir el conocimiento. El requisito para ello es que los clasificadores sean lo suficientemente diversos.
+
+**** DDM
+
+Uno de los detectores de /Concept Drift/ más usados es /Drift Detection Method/ (DDM). DDM controla el número de errores que produce el modelo durante el proceso de predicción. DDM funciona comparando las estadísticas de dos ventanas de tiempo. Una ventana tiene las estadísticas de errores de todos los datos, la segunda contiene los datos desde el inicio hasta que el error empieza a incrementar considerablemente. El método no mantiene las ventanas en memoria. Solo almacena estadísticas y una ventana de datos recientes.
+
+El número de errores en una población de /n/ muestras se modeliza mediante una distribución binomial. Para cada punto /i/ en la secuencia muestreada, la proporción de error es la probabilidad de clasificar incorrectamente ($p_{i}$), con una desviación estándar dada por $s_{i} = \sqrt{\frac{p_{i}(1 - p_{i})}{i}}$. Asume que la proporción del error del algoritmo de aprendizaje ($p_i$) decrecerá conforme el número de muestras incremente si la distribución de los datos es estacionaria. Un incremento significativo en el error sugiere que la distribución de las clases está cambiando y, por tanto, el modelo de decisión puede suponerse inapropiado. Por tanto, almacena los valores de $p_{i}$ y $s_{i}$ cuando $p_{i} + s_{i}$ alcanzan su valor mínimo durante el proceso (obteniendo así $p_{min}$ y $s_{min}$) y cuando las siguientes condiciones se cumplen:
+
+
+- $p_{i} + s_{i} \geq p_{min} + 2\cdot s_{min}$ para el nivel de alerta. Más allá de este nivel, las muestras se almacenan como anticipación de un posible cambio de concepto.
+- $p_{i} + s_{i} \geq p_{min} + 3\cdot s_{min}$ para el nivel de cambio. Más allá de este nivel el cambio de concepto se supone cierto, el modelo inducido por el método de aprendizaje se resetea y se aprende un nuevo modelo usando las muestras almacenadas cuando saltó la alerta en el punto anterior. Se resetean los valores de $p_{min}$ y $s_{min}$.
+
+Esta aproximación se comporta bien detectando cambios bruscos y graduales cuando los cambios graduales no son muy lentos, sin embargo tiene dificultades cuando el cambio es lento. En dicho caso, las muestras se almacenarán durante mucho tiempo, el nivel de cambio puede tardar mucho en ejecutarse y los ejemplos en memoria pueden ser inútiles.
+
+DDM se ha usado en el ejercicio 2.5.
+
+
+* Parte Práctica
+
 Para todas las ejecuciones de este documento se ha usado el siguiente script:
 
 #+INCLUDE: "~/Documents/Estudios/Máster/Series Temporales/Practica Flujos/Pratica2/launchExperiment.sh" src bash
@@ -24,9 +122,9 @@ Donde se han modificado las instrucciones para MOA necesarias para cada ejercici
 
 #+INCLUDE: "~/Documents/Estudios/Máster/Series Temporales/Practica Flujos/Pratica2/practica2.R" src R :eval never
 
-* Entrenamiento Offline
+** Entrenamiento Offline
 
-** Ejercicio 1
+*** Ejercicio 1
 /Entrenar un clasificador HoeffdingTree offline (estacionario, aprender modelo únicamente), sobre un total de 1.000.000 de instancias procedentes de un flujo obtenido por el generador WaveFormGenerator con semilla aleatoria igual a 2. Evaluar posteriormente (sólo evaluación) con 1.000.000 de instancias generadas por el mismo tipo de generador, con semilla aleatoria igual a 4. Repita el proceso varias veces con la misma semilla en evaluación y diferentes semillas en entrenamiento, para crear una población de resultados. Anotar como resultados los valores de porcentajes de aciertos en la clasificación y estadístico Kappa./
 
 #+BEGIN_SRC bash
@@ -90,7 +188,7 @@ El resultado de los 30 experimentos es el siguiente:
 | 29          | 77.049 | 84.698   |
 | 30          | 77.052 | 84.7     |
 
-** Ejercicio 2
+*** Ejercicio 2
 /Repetir el paso anterior, sustituyendo el clasificador por HoeffdingTree adaptativo./
 
 #+BEGIN_SRC bash
@@ -136,7 +234,7 @@ En este apartado simplemente hay que cambiar el tipo de algoritmo a aprender por
 |          29 | 76.861 | 84.573 |
 |          30 | 76.528 | 84.351 |
 
-** Ejercicio 3
+*** Ejercicio 3
 /Responda a la pregunta: ¿Cree que algún clasificador es significativamente mejor que el otro en este tipo de problemas? Razone su respuesta./
 
 Para responder a la pregunta, se hace uso de los 30 experimentos realizados con cada algoritmo. Antes de aplicar ningún test estadístico para comprobar si hay diferencias significativas, se comprueba la normalidad de los datos con un /Shaphiro Test/:
@@ -155,9 +253,9 @@ t.test(results1.1$kappa, results1.2$kappa)
 #+END_SRC
 Ambos tests obtienen un p-value <.05, por tanto existen diferencias significativas entre ambos algoritmos. Se puede concluir por tanto que el primer algoritmo es ligeramente mejor que el segundo. Esto se debe a que en media el algoritmo 1 tiene un acierto del 84.56863 y el algoritmo 2 de 84.49253.
 
-* Entrenamiento Online
+** Entrenamiento Online
 
-** Ejercicio 1
+*** Ejercicio 1
 /Entrenar un clasificador HoeffdingTree online, mediante el método Interleaved Test-Then-Train, sobre un total de 1.000.000 de instancias procedentes de un flujo obtenido por el generador WaveFormGenerator con semilla aleatoria igual a 2, con una frecuencia de muestreo igual a 10.000. Pruebe con otras semillas aleatorias para crear una población de resultados. Anotar los valores de porcentajes de aciertos en la clasificación y estadístico Kappa./
 
 #+BEGIN_SRC bash
@@ -209,7 +307,7 @@ Tras ejecutar el experimento 30 veces, estos son los resultados:
 | 75.7606311965536 | 83.8403 |
 | 75.7117419305858 | 83.8079 |
 
-** Ejercicio 2
+*** Ejercicio 2
 /Repetir el paso anterior, sustituyendo el clasificador por HoeffdingTree adaptativo./
 
 La única diferencia con respecto al anterior es el tipo de modelo:
@@ -255,15 +353,15 @@ Los resultados de las 30 ejecuciones son:
 | 75.740668517912  | 83.8266 |
 | 75.7169982422218 | 83.8107 |
 
-** Ejercicio 3
+*** Ejercicio 3
 /Responda a la pregunta: ¿Cree que algún clasificador es mejor que el otro en este tipo de problemas? Razone su respuesta./
 
 Igualmente, se debe comprobar que los datos son normales mediante tests estadísticos. En este caso, el segundo algoritmo no es normal, por tanto hay que hacer la comparación con un test no paramétrico, como el de Wilcoxon
 
 En este caso, el test de wilcoxon tiene un p-value de 0.05099 para el /Accuracy/, y de 0.04621 para el /Kappa/. Podríamos arriesgarnos y concluir que existen diferencias significativas entre ambos algoritmos, en dicho caso, el algoritmo 1 es ligeramente mejor, con un 83.87% de acierto frente a un 83.82792% de acierto del algoritmo 2.
 
-* Entrenamiento Online con Concept Drift
-** Ejercicio 1
+** Entrenamiento Online con Concept Drift
+*** Ejercicio 1
 /Entrenar un clasificador HoeffdingTree online, mediante el método Interleaved Test-Then-Train, sobre un total de 2.000.000 de instancias muestreadas con una frecuencia de 100.000, sobre datos procedentes de un generador de flujos RandomRBFGeneratorDrift, con semilla aleatorio igual a 1 para generación de modelos y de instancias, generando 2 clases, 7 atributos, 3 centroides en el modelo, drift en todos los centroides y velocidad de cambio igual a 0.001. Pruebe con otras semillas aleatorias. Anotar los valores de porcentajes de aciertos en la clasificación y estadístico Kappa. Compruebe la evolución de la curva de aciertos en la GUI de MOA./
 
 #+BEGIN_SRC bash
@@ -289,7 +387,7 @@ Como se puede apreciar en la imagen de abajo, el algoritmo empieza a empeorar su
 
 [[file:img/ejer3.1.png]]
 
-** Ejercicio 2
+*** Ejercicio 2
 Repetir el paso anterior, sustituyendo el clasificador por HoeffdingTree adaptativo.
 
 #+BEGIN_SRC bash
@@ -305,16 +403,16 @@ En este caso  lo único que ha cambiado ha sido el algoritmo. El resultado de es
 
 Como se aprecia, el resultado es mucho mejor, es el resultado de aplicar un modelo adaptativo cuando se produce /Content Drift/
 
-** Ejercicio 3
+*** Ejercicio 3
 /Responda a la pregunta: ¿Cree que algún clasificador es mejor que el otro en este tipo de problemas? Razone su respuesta./
 
 Los resultados del test de normalidad para el /accuray/ para ambos modelos se puede considerar normales (Para el primer algoritmo es normal, con un p-value de 0.95, y para el segundo algoritmo podemos considerarlo normal, con un p-value de 0.05039). Debido a esto, se aplica un t.test, que da como resultado un p-value de 5.939e-08. Por tanto existen diferencias significativas entre ambos algoritmos. Si comparamos las medias de /accuracy/ entre ambos, vemos que el segundo algoritmo (=HoeffdingAdaptiveTree=) es bastante mejor, con una media de acierto del 93.88% frente al 80.36% de =HoeffdingTree=. Esto es debido a la capacidad de adaptarse a los cambios de concepto de =HoeffdingAdaptiveTree=.
 
 Para el valor /Kappa/, el test de normalidad indica normalidad para =HoeffdingTree=, pero no normalidad para =HoeffdingAdaptiveTree=, por tanto es necesario hacer un test de Wilcoxon. Los resultados del test muestran un p-value de 2.493e-13, por tanto existen diferencias significativas entre ambas poblaciones de /Kappa/. En este caso, la media de /kappa/ de =HoeffdingAdaptiveTree= es bastante superior a la de =HoeffdingTree=, 78.43% frente a 33.66%. Por tanto se puede concluir que =HoeffdingAdaptiveTree= se comporta bastante mejor para este tipo de problema.
 
-* Entrenamiento Online con Concept Drift, con mecanismos para olvidar instancias pasadas
+** Entrenamiento Online con Concept Drift, con mecanismos para olvidar instancias pasadas
 
-** Ejercicio 1
+*** Ejercicio 1
 /Repita la experimentación del apartado anterior, cambiando el método de evaluación “Interleaved Test-Then-Train” por el método de evaluación “Prequential”, con una ventana deslizante de tamaño 1.000./
 
 /EvaluatePrequential/ evalúa el clasificador sobre un flujo de datos testeando y luego entrenando con cada ejemplo en secuencia. Es posible usar una ventana deslizante o un mecanismo de olvido del factor de desvanecimiento. En la siguiente instrucción no aparece la ventana deslizante porque por defecto está fijada a 1000.
@@ -345,7 +443,7 @@ EvaluatePrequential -l trees.HoeffdingAdaptiveTree \
    -i 2000000
 #+END_SRC
 
-** Ejercicio 2
+*** Ejercicio 2
 /¿Qué efecto se nota en ambos clasificadores? ¿A qué es debido? Justifique los cambios relevantes en los resultados de los clasificadores./
 
 En las siguientes figuras se muestran los resultados de ambas ejecuciones, queda bastante claro que =HoeffdingAdaptiveTree= es bastante mejor.
@@ -432,9 +530,9 @@ Mientras que =HoeffdingTree=:
 
 Queda a la vista que =HoeffdingTree= en este caso fluctua mucho más en los resultados, aunque en varias ejecuciones ha obtenido un 100%, varía mucho en sus resultados. Por contra, =HoeffdingAdaptiveTree= no suele bajar del 90% de precisión.
 
-* Entrenamiento Online con Concept Drift, con mecanismos para reinicializar modelos
+** Entrenamiento Online con Concept Drift, con mecanismos para reinicializar modelos
 
-** Ejercicio 1
+*** Ejercicio 1
 /Repita la experimentación del apartado 2.3, cambiando el modelo (learner) a un clasificador simple basado en reemplazar el clasificador actual cuando se detecta un cambio de concepto (SingleClassifierDrift). Como detector de cambio de concepto, usar el método DDM con sus parámetros por defecto. Como modelo a aprender, usar un clasificador HoeffdingTree./
 
 Las tarea a ejecutar ahora es la siguiente:
@@ -447,12 +545,14 @@ EvaluateInterleavedTestThenTrain -l (drift.SingleClassifierDrift \
 #+END_SRC
 donde
 
+EvaluateInterleavedTestThenTrain -l (drift.SingleClassifierDrift -l trees.HoeffdingTree)    -s (generators.RandomRBFGeneratorDrift -r 1 -i 1        -s 0.001 -k 3 -a 7 -n 3)   -r 1 -i 2000000
+
 - =-l= ahora especifica el modelo a aprender envuelto en un =SingleClassifierDrift=.
 - =-s= es el generador de flujos, con los mismos parámetros de ejercicios anteriores.
 
 /SingleClassifierDrift/ controla el cambio de concepto con un envoltorio en un clasificador. El método de detección de cambio de concepto funciona comparando las estadísticas de dos ventanas de tiempo. Una ventana tiene las estadísticas de errores de todos los datos, la segunda contiene los datos desde el inicio hasta que el error empieza a incrementar considerablemente.
 
-** Ejercicio 2
+*** Ejercicio 2
 /Repita el paso anterior cambiando el clasificador HoeffdingTree por un clasificador HoeffdingTree adaptativo./
 
 Simplemente hay que cambiar el modelo:
@@ -464,7 +564,7 @@ EvaluateInterleavedTestThenTrain -l (drift.SingleClassifierDrift \
    -r 1 -i 2000000
 #+END_SRC
 
-** Ejercicio 3
+*** Ejercicio 3
 /Responda a la siguiente pregunta: ¿Qué diferencias se producen entre los métodos de los apartados 2.3, 2.4 y 2.5? Explique similitudes y diferencias entre las diferentes metodologías, y discuta los resultados obtenidos por cada una de ellas en el flujo de datos propuesto./
 
 Los resultados de las ejecuciones de los dos apartados anteriores se muestran en la siguiente imagen:

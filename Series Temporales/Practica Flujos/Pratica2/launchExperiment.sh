@@ -25,8 +25,8 @@ _main() {
 
     for i in $(seq $N)
     do
-        java -cp moa.jar -javaagent:sizeofag-1.0.0.jar moa.DoTask \
-             "AQUI VA LA TAREA" > "${outDIR}/$1.$i.csv"
+        java -cp moa.jar -javaagent:sizeofag-1.0.0.jar moa.DoTask
+            "TAREA AQUÍ" > "${outDIR}/$1.$i.csv"
     done
 }
 
