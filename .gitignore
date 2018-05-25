@@ -33,3 +33,4 @@ vignettes/*.pdf
 *.knit.md
 *.pdf
 metafiles
+/Extracción de Características en Imágenes/ECI.Practica/dist/

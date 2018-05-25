@@ -1,3 +1,6 @@
 [submodule "Avanzados/guns-vs-phones"]
 	path = Avanzados/guns-vs-phones
 	url = git@github.com:fdavidcl/guns-vs-phones.git
+[submodule "Sistemas de Recuperación de Información y de Recomendación/Trabajo final/clustering-summarization"]
+	path = Sistemas de Recuperación de Información y de Recomendación/Trabajo final/clustering-summarization
+	url = git@github.com:fdavidcl/clustering-summarization.git
