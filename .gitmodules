@@ -4,3 +4,6 @@
 [submodule "Sistemas de Recuperación de Información y de Recomendación/Trabajo final/clustering-summarization"]
 	path = Sistemas de Recuperación de Información y de Recomendación/Trabajo final/clustering-summarization
 	url = git@github.com:fdavidcl/clustering-summarization.git
+[submodule "Robótica Móvil y Neurobótica/Practicas/Final/LineFollowerObstacles"]
+	path = Robótica Móvil y Neurobótica/Practicas/Final/LineFollowerObstacles
+	url = git@github.com:HerAlc/LineFollowerObstacles.git
