@@ -7,3 +7,6 @@
 [submodule "Robótica Móvil y Neurobótica/Practicas/Final/LineFollowerObstacles"]
 	path = Robótica Móvil y Neurobótica/Practicas/Final/LineFollowerObstacles
 	url = git@github.com:HerAlc/LineFollowerObstacles.git
+[submodule "open-access"]
+	path = open-access
+	url = git@github.com:fdavidcl/open-access.git
